@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Points the app at the ephemeral Postgres/Redis service containers below,
+  # overriding whatever .env.example would otherwise set (Laravel/phpdotenv
+  # never overwrites an already-set real environment variable).
+  DB_CONNECTION: pgsql
+  DB_HOST: 127.0.0.1
+  DB_PORT: 5432
+  DB_DATABASE: oda_crm_test
+  DB_USERNAME: oda_app
+  DB_PASSWORD: secret
+  REDIS_HOST: 127.0.0.1
+  REDIS_PORT: 6379
+  QUEUE_CONNECTION: sync
+  SESSION_DRIVER: array
+  CACHE_STORE: array
+  MAIL_MAILER: log
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oda_crm_test
+          POSTGRES_USER: oda_app
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oda_app -d oda_crm_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo, pdo_pgsql, pgsql, bcmath, zip, intl, gd, mbstring, curl, redis
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Lint (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan / Larastan)
+        run: composer run types:check
+
+      # Verifies the migration set actually applies to real PostgreSQL (catches
+      # Postgres-specific issues sqlite would hide — numeric precision, RLS,
+      # btree_gist, etc., per docs/architecture.md §4). Pest itself then runs
+      # against its own sqlite in-memory DB per phpunit.xml, which is the
+      # documented convention for fast module-agent feedback loops
+      # (docs/architecture.md §3.5/§3.6). A dedicated RLS integration suite
+      # that must run against real Postgres with the restricted `oda_app` role
+      # is added once RLS policies exist; it will connect explicitly rather
+      # than relying on this global test DB.
+      - name: Run migrations against test database
+        run: php artisan migrate --force --no-interaction
+
+      - name: Pest test suite
+        run: php artisan test
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend typecheck
+        run: npm run types:check
+
+      - name: Frontend production build
+        run: npm run build

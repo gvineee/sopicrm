@@ -1,0 +1,15 @@
+{
+  "name": "device-connector",
+  "version": "0.0.0-placeholder",
+  "private": true,
+  "description": "Placeholder process for the Suprema device-connector service. See README.md — no real device/G-SDK integration exists yet.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"no tests yet — placeholder service\" && exit 0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

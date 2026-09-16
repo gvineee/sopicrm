@@ -1,0 +1,173 @@
+name: oda-crm
+
+# Local development orchestration only (docs/architecture.md §1, DEC-017).
+# Not a production deployment manifest — hosting/production topology is a
+# separate, not-yet-made decision (docs/decisions.md § Open business-policy
+# questions #6).
+#
+# Usage (from the project root):
+#   docker compose -f infra/docker-compose.yml up -d
+# See docs/runbook.md for the full local setup sequence.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oda_crm
+      POSTGRES_USER: oda_app
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - oda_crm_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oda_app -d oda_crm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - oda_crm_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # mailhog-compatible local SMTP catcher. Mailpit was chosen over MailHog
+  # (which is unmaintained) — see docs/decisions.md. Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # S3-compatible object storage for the private uploads disk (DEC-010).
+  # Console UI: http://localhost:9001 (minioadmin / minioadmin).
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - oda_crm_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot init container: creates the local bucket so the app doesn't have
+  # to do it at runtime. Exits after running; safe to re-run (idempotent).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/oda-crm-local
+      "
+    restart: "no"
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/docker/php/Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+    env_file:
+      - ../.env
+    environment:
+      # Container-network overrides — take precedence over the host-oriented
+      # values in .env (php-dotenv never overwrites already-set env vars).
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      AWS_ENDPOINT: http://minio:9000
+    volumes:
+      - ..:/var/www/html
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/php/Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "redis", "--tries=3", "--backoff=5"]
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      AWS_ENDPOINT: http://minio:9000
+    volumes:
+      - ..:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: infra/docker/php/Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    # No cron daemon in the image — loop `schedule:run` once a minute, the
+    # standard Laravel-in-Docker pattern.
+    command: ["sh", "-c", "while true; do php artisan schedule:run --no-interaction; sleep 60; done"]
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      AWS_ENDPOINT: http://minio:9000
+    volumes:
+      - ..:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # PLACEHOLDER — see services/device-connector/README.md. No real Suprema
+  # G-SDK integration exists yet; this only proves the container shape.
+  device-connector:
+    build:
+      context: ../services/device-connector
+    restart: unless-stopped
+    environment:
+      DEVICE_CONNECTOR_MODE: simulator
+      DEVICE_CONNECTOR_PORT: 4000
+    ports:
+      - "4000:4000"
+
+volumes:
+  oda_crm_postgres_data:
+  oda_crm_redis_data:
+  oda_crm_minio_data:
