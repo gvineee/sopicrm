@@ -87,6 +87,20 @@ jobs:
           cp .env.example .env
           php artisan key:generate --ansi
 
+      # docs/architecture.md §4 (DEC-016): Postgres RLS is a no-op for
+      # superusers regardless of FORCE ROW LEVEL SECURITY, and the official
+      # postgres image's POSTGRES_USER is created AS a superuser by default.
+      # tests/Feature/Auth/TenantIsolationRlsTest.php explicitly asserts the
+      # connection it runs as is NOT a superuser (failing loudly, not
+      # silently passing-but-meaningless, if this step is ever skipped) —
+      # per the spec's "tested with a real runtime DB role" requirement.
+      # Stripping the flag here, before migrations run, is safe: owning the
+      # database/tables (which `oda_app` already does) is sufficient to run
+      # DDL against them, superuser status is not required.
+      - name: Strip superuser from the CI Postgres role (RLS must be real)
+        run: |
+          PGPASSWORD=secret psql -h 127.0.0.1 -U oda_app -d oda_crm_test -c "ALTER ROLE oda_app NOSUPERUSER;"
+
       - name: Lint (Pint)
         run: vendor/bin/pint --test
 
@@ -95,16 +109,19 @@ jobs:
 
       # Verifies the migration set actually applies to real PostgreSQL (catches
       # Postgres-specific issues sqlite would hide — numeric precision, RLS,
-      # btree_gist, etc., per docs/architecture.md §4). Pest itself then runs
-      # against its own sqlite in-memory DB per phpunit.xml, which is the
-      # documented convention for fast module-agent feedback loops
-      # (docs/architecture.md §3.5/§3.6). A dedicated RLS integration suite
-      # that must run against real Postgres with the restricted `oda_app` role
-      # is added once RLS policies exist; it will connect explicitly rather
-      # than relying on this global test DB.
+      # btree_gist, etc., per docs/architecture.md §4).
       - name: Run migrations against test database
         run: php artisan migrate --force --no-interaction
 
+      # The bulk of the suite runs against its own sqlite in-memory DB per
+      # phpunit.xml (the documented convention for fast feedback loops,
+      # docs/architecture.md §3.5/§3.6). The one exception is
+      # tests/Feature/Auth/TenantIsolationRlsTest.php, which explicitly opens
+      # its OWN connection (config/database.php `pgsql_rls_test`) to this
+      # same real Postgres database as the restricted `oda_app` role and
+      # `migrate:fresh`-es it again itself — proving Postgres RLS actually
+      # blocks cross-tenant reads with a real runtime DB role, per spec
+      # sections 18/23, not just sqlite-backed Eloquent-scope assertions.
       - name: Pest test suite
         run: php artisan test
 

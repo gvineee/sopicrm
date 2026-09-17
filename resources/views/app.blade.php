@@ -34,6 +34,15 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
+        {{-- Installable PWA shell — spec section 17 --}}
+        <link rel="manifest" href="/manifest.webmanifest">
+        <meta name="theme-color" content="#0f7a56" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#14171a" media="(prefers-color-scheme: dark)">
+        {{-- iOS has no manifest-driven standalone/status-bar control, hence these meta tags --}}
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="ODA CRM">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
         @fonts
 
         @vite(['resources/css/app.css', 'resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])

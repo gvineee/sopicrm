@@ -47,8 +47,13 @@ docker compose -f infra/docker-compose.yml up -d
 #    fresh clone needs this)
 php artisan key:generate
 
-# 6. Run migrations (currently just the starter kit's users/cache/jobs/passkeys
-#    tables — the full P0/P1 data model is added in a later phase)
+# 6. Run migrations — the full P0+P1 data model (docs/data-model.md) is now
+#    part of the initial migration set (Access/Employees/Devices/Attendance/
+#    Payroll/Assets/Projects&Tasks/DailyJournal + cross-cutting tables),
+#    verified against a real local Postgres 17 instance during the P0+P1
+#    schema pass (2026-09-16, docs/decisions.md). No Postgres/Docker
+#    available here? See "Required local tooling" below — a native local
+#    Postgres install (not Docker) is what this environment actually used.
 php artisan migrate
 
 # 7. Frontend dev server (Vite) — runs on the host, not inside Docker, per
@@ -82,11 +87,49 @@ codebase — either raise `memory_limit` in `php.ini` or pass
 `php -d memory_limit=1G vendor\phpstan\phpstan\phpstan.phar analyse`. CI is
 unaffected (`shivammathur/setup-php` sets `memory_limit=-1`).
 
+**Windows note (`bootstrap/cache` not writable):** if `composer install`/`composer require`
+fails on `php artisan package:discover` with "The .../bootstrap/cache directory
+must be present and writable" even though the directory clearly exists, check
+whether it (or `bootstrap/`) has the NTFS `ReadOnly` attribute set (`Get-Item
+bootstrap\cache -Force | Select Attributes` in PowerShell) — PHP's
+`is_writable()` respects this legacy Windows flag even though the OS itself
+mostly ignores it for directories. Fix: `attrib -R bootstrap; attrib -R
+bootstrap\cache`. See DEC-045.
+
+### Auth/RBAC/Tenancy: local Postgres + Redis without Docker (this environment, 2026-09-16)
+
+Docker Desktop is still not installed here (see DEC-024, DEC-043), but this
+machine already has a native **PostgreSQL 17** server and **Redis** (via
+Scoop) installed — used directly instead:
+
+```powershell
+# Redis must be running before `php artisan migrate` (spatie/laravel-permission's
+# migration clears its permission cache through the configured CACHE_STORE=redis)
+# or before `php artisan serve` (sessions/cache/queue all use Redis per DEC-025).
+redis-server        # in its own terminal/background process; redis-cli ping -> PONG
+
+# One-time: create the oda_app role + the two databases DEC-026/DEC-043 expect,
+# as the local postgres superuser (adjust host/port/superuser password as needed).
+$env:PGPASSWORD = "postgres"
+$psql = "C:\Program Files\PostgreSQL\17\bin\psql.exe"
+& $psql -U postgres -h 127.0.0.1 -c "CREATE ROLE oda_app LOGIN PASSWORD 'secret';"
+& $psql -U postgres -h 127.0.0.1 -c "CREATE DATABASE oda_crm OWNER oda_app;"       # dev
+& $psql -U postgres -h 127.0.0.1 -c "CREATE DATABASE oda_crm_test OWNER oda_app;"  # RLS test suite / CI
+
+php artisan migrate:fresh --seed   # RBAC roles/permissions + a demo org+owner user
+                                    # (test@example.com / password, see DatabaseSeeder)
+```
+
+`tests/Feature/Auth/TenantIsolationRlsTest.php` connects to `oda_crm_test`
+directly via `config/database.php`'s `pgsql_rls_test` connection and runs its
+own `migrate:fresh` against it — no extra setup beyond the database existing
+and `oda_app` being a real (non-superuser) role.
+
 ---
 
 ## Environments
 
-- **dev**: local machine, Docker Compose stack (`infra/docker-compose.yml`), no seed data beyond RBAC roles/permissions and reference lookups — spec section 21 explicitly forbids production seed data, and dev should mirror that discipline as closely as practical while still being usable for manual testing (factories/seeders clearly marked dev-only).
+- **dev**: local machine, Docker Compose stack (`infra/docker-compose.yml`) or a native Postgres/Redis install (see above) — no seed data beyond RBAC roles/permissions (always seeded, every environment — reference data, not "production seed data") plus, outside `APP_ENV=production` only, one demo organization + owner user for manual testing (`database/seeders/DatabaseSeeder.php`, guarded by an explicit `app()->environment('production')` check). Spec section 21 explicitly forbids production seed data; this guard is how that's actually enforced, not just a convention.
 - **staging**: mirrors production configuration; used for the section 21 performance targets (p95 ≤ 800ms list/read, mobile LCP ≤ 2.5s, event-to-UI lag p95 ≤ 10s) and for the section 17 mandatory real-device PWA install acceptance tests. Hosting provider not yet chosen — see `docs/decisions.md` § Open business-policy questions #6.
 - **production**: no seed data; real backups (encrypted DB backup + PITR where the chosen host supports it, object versioning/backup for attachments, target RPO ≤ 15 min / RTO ≤ 4h to be confirmed once hosting is chosen); restore drills documented once infra exists.
 
@@ -97,13 +140,13 @@ unaffected (`shivammathur/setup-php` sets `memory_limit=-1`).
 Implemented in `.github/workflows/ci.yml` (GitHub Actions), per spec section 21 ("CI: lint, typecheck, migrations, tests, build"). Runs on every push to `main` and every pull request:
 
 1. `composer install`.
-2. PHP lint (`vendor/bin/pint --test`) and static analysis (`composer run types:check`, i.e. PHPStan/Larastan).
-3. `php artisan migrate --force` against a real ephemeral Postgres 16 service container (catches Postgres-specific issues sqlite would hide — see the comment in the workflow for why Pest itself still runs against sqlite).
-4. Pest test suite (`php artisan test`).
-5. `npm ci`, frontend typecheck (`npm run types:check`, i.e. `vue-tsc`), and production build (`npm run build`).
+2. Strip the `SUPERUSER` attribute from the ephemeral Postgres service container's `oda_app` role (the official image grants it by default, which would make RLS a silent no-op — see DEC-043).
+3. PHP lint (`vendor/bin/pint --test`) and static analysis (`composer run types:check`, i.e. PHPStan/Larastan).
+4. `php artisan migrate --force` against a real ephemeral Postgres 16 service container (catches Postgres-specific issues sqlite would hide — see the comment in the workflow for why Pest itself still runs against sqlite).
+5. Pest test suite (`php artisan test`) — the bulk runs against sqlite per `phpunit.xml`, except `tests/Feature/Auth/TenantIsolationRlsTest.php`, which opens its own connection to the same real Postgres service container as the restricted `oda_app` role (DEC-043) and proves cross-tenant RLS isolation for real, not just via the Eloquent-scope layer.
+6. `npm ci`, frontend typecheck (`npm run types:check`, i.e. `vue-tsc`), and production build (`npm run build`).
 
 Not yet in CI (future phases, per `docs/decisions.md`):
-- RLS-real-role integration tests (added once RLS policies and the `oda_app` restricted DB role exist — `btree_gist`/RLS aren't part of the current schema, which is still just the starter kit's default users/cache/jobs/passkeys tables).
 - Vitest frontend unit tests (no component tests exist yet to run).
 - Playwright E2E (added when there are real pages/flows to test end-to-end).
 
@@ -118,6 +161,31 @@ Placeholder — do not fabricate specifics ahead of an actual hosting decision (
 ## Health / monitoring (to be filled in by Foundation + Integration)
 
 Placeholder for: `/health` and `/ready` endpoint behavior, worker graceful-shutdown behavior, and the operational dashboards for device heartbeat, event ingestion lag, command retry counts, dead-letter queue depth, DB health, upload failures, and backup status — per spec section 21's explicit list. UI must distinguish "no data yet" from "confirmed zero," per spec's explicit requirement.
+
+---
+
+## Design system / PWA shell (design-system pass, 2026-09-16)
+
+### Where things live
+- Tokens: `resources/css/app.css` (`:root`/`.dark` — see `docs/decisions.md` DEC-046 for the palette and how contrast was verified).
+- Shared layout/shell: `resources/js/layouts/app/AppSidebarLayout.vue` (desktop sidebar + mobile bottom-nav/top-bar in one responsive shell), `resources/js/components/mobile/*`, `resources/js/lib/mobileNav.ts` (reserved bottom-nav slots — DEC-054).
+- Standard states: `resources/js/components/states/*.vue` (Loading/Empty/Error/PermissionDenied/Offline/Conflict).
+- Data primitives: `resources/js/components/data/*.vue` (DataTable, FilterBar, SavedFilters, TablePagination, DetailDrawer, KanbanBoard) + `resources/js/composables/useServerTable.ts`, `useSavedFilters.ts`.
+- PWA: `public/manifest.webmanifest`, `public/sw.js`, `public/offline.html`, `public/icons/*`, `resources/js/lib/pwa.ts` (SW registration/update flow), `resources/js/composables/usePwaInstall.ts`, `resources/js/components/pwa/*.vue`.
+- Offline queue primitive: `resources/js/lib/offlineQueue.ts` (IndexedDB; see DEC-053).
+- Two local/testing-only QA routes exist purely for responsive-layout screenshotting without a login: `GET design-system/my-day` and `GET design-system/dashboard` (see DEC-050) — 404 outside `APP_ENV=local|testing`.
+
+### Testing PWA installability locally
+The manifest/service-worker require a real HTTPS-or-localhost origin and won't do much over `php artisan serve`'s plain HTTP on a non-`localhost` hostname — use `http://127.0.0.1:8000` or `http://localhost:8000` (both count as a "potentially trustworthy origin" for service workers without HTTPS).
+
+1. `npm run build` (or `npm run dev` — the SW/manifest links are static `<link>`/`<meta>` tags in `resources/views/app.blade.php`, unaffected by dev vs. build).
+2. `php artisan serve` (or the Docker `app` service).
+3. Open `http://127.0.0.1:8000/dashboard` (log in first — a real page is needed for `beforeinstallprompt`'s engagement heuristics; the `design-system/*` QA routes work too and skip login, but only in `local`/`testing`).
+4. **Desktop Chrome/Edge**: DevTools → Application tab → *Manifest* (checks the manifest parses, shows icons or a maskable-icon warning) and *Service Workers* (confirms `sw.js` registered, shows status). The install icon in the address bar (⊕) appearing is the real `beforeinstallprompt` signal — the in-app "დააყენე ODA" button (`InstallOdaButton.vue`) only renders once that same browser event has actually fired, per spec 17's feature-detection requirement; it will not appear on a fresh, uninstalled page load until the browser decides the engagement heuristic is satisfied (a page reload or two, and some time on-page, is often needed).
+5. **Offline fallback**: DevTools → Application → Service Workers → check "Offline", then reload — should show `public/offline.html`, not a browser error page. Uncheck "Offline" to restore.
+6. **Update flow**: after registering once, change something trivial in `public/sw.js` (bump `CACHE_VERSION`), rebuild, reload the tab twice (SW updates are checked on navigation) — the amber "ახალი ვერსია მზადაა" banner (`UpdateAvailableBanner.vue`) should appear; clicking "განახლება" should activate the new worker and reload once.
+7. **Android Chrome / iPhone Safari real-device install** (spec 17's mandatory acceptance test): this cannot be done from this dev machine alone — either port-forward the local server to a phone on the same network (`php artisan serve --host=0.0.0.0`, then `http://<your-LAN-IP>:8000` on the phone) or deploy to a real HTTPS staging host. On Android Chrome, confirm the native install prompt/banner and the in-app "დააყენე ODA" button both work and that the button hides once standalone. On iPhone/iPad Safari, confirm the "iPhone/iPad-ზე დაყენება" instructional guide (`IosInstallGuide.vue`) shows (no fake install button — Safari has no `beforeinstallprompt`), and manually follow Share → Add to Home Screen → confirm standalone launch has no browser chrome. **Record OS/browser versions in the test report — a desktop/emulator check alone does not satisfy this acceptance test** (spec 17: "Simulator/browser emulation მარტო არ ითვლება ორივე პლატფორმის ინსტალაციის დამოწმებად"). This was NOT performed as part of this pass (no physical devices available in this environment) — flagged as pending manual QA, not claimed as done.
+8. **Offline queue**: open DevTools → Application → IndexedDB → `oda-crm-offline` to inspect `queue_items`/`blobs` once a module starts calling `enqueue()` from `resources/js/lib/offlineQueue.ts`; nothing writes to it yet in this pass (no real draft-producing screen exists), so an empty database at this stage is expected, not a bug.
 
 ---
 

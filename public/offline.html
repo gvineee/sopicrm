@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ka">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <title>ODA CRM — ხაზგარეშე</title>
+        <style>
+            :root {
+                --background: #faf7f2;
+                --foreground: #1f2328;
+                --primary: #0f7a56;
+                --muted-foreground: #5b6168;
+                --border: #e4ddcf;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --background: #14171a;
+                    --foreground: #f2efe8;
+                    --primary: #34c38f;
+                    --muted-foreground: #adb3b8;
+                    --border: #2a2f34;
+                }
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                min-height: 100dvh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: var(--background);
+                color: var(--foreground);
+                font-family:
+                    'Instrument Sans',
+                    'Noto Sans Georgian',
+                    ui-sans-serif,
+                    system-ui,
+                    sans-serif;
+                padding: 24px;
+                padding-top: max(24px, env(safe-area-inset-top));
+                padding-bottom: max(24px, env(safe-area-inset-bottom));
+            }
+            .card {
+                max-width: 26rem;
+                width: 100%;
+                text-align: center;
+            }
+            .icon {
+                width: 56px;
+                height: 56px;
+                margin: 0 auto 20px;
+                border-radius: 16px;
+                background: var(--primary);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            h1 {
+                font-size: 1.25rem;
+                margin: 0 0 8px;
+            }
+            p {
+                font-size: 1rem;
+                line-height: 1.5;
+                color: var(--muted-foreground);
+                margin: 0 0 20px;
+            }
+            button {
+                font: inherit;
+                font-size: 1rem;
+                min-height: 44px;
+                padding: 0 20px;
+                border-radius: 10px;
+                border: 1px solid var(--border);
+                background: var(--primary);
+                color: #fff;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="icon" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 8.82a15 15 0 0 1 20 0" />
+                    <path d="M5 12.86a10 10 0 0 1 14 0" />
+                    <path d="M8.5 16.9a5 5 0 0 1 7 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+            </div>
+            <h1>კავშირი ვერ მოიძებნა</h1>
+            <p>
+                ODA CRM ამჟამად ვერ უკავშირდება სერვერს. ადრე შენახული
+                გვერდები კვლავ ხელმისაწვდომია; შენახული დავალებები და
+                ფოტოები დარჩება მოწყობილობაზე და ავტომატურად გაიგზავნება
+                კავშირის აღდგენისას.
+            </p>
+            <button onclick="window.location.reload()">ხელახლა ცდა</button>
+        </div>
+    </body>
+</html>

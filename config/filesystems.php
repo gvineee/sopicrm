@@ -38,6 +38,24 @@ return [
             'report' => false,
         ],
 
+        // Tasks module (docs/decisions.md): `attachments.disk` defaults to
+        // the literal string 'private' (docs/data-model.md), but no disk of
+        // that name existed — only 'local'/'public'/'s3'. Added as its own
+        // named disk (same local driver/root as 'local' for now) rather than
+        // silently reusing 'local' under a different name, so a later
+        // deployment can point 'private' at a real non-public S3-compatible
+        // bucket (DEC-010) without also having to rename the app's default
+        // 'local' disk. Never served over a public URL — downloads only
+        // ever go through a signed, short-lived route after a Policy check
+        // (see App\Http\Controllers\Tasks\TaskAttachmentDownloadController).
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

@@ -1,8 +1,20 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid } from '@lucide/vue';
+/**
+ * Desktop sidebar — renders whichever nav groups/items the server actually
+ * sent (`navGroups`, shared by every Inertia response via
+ * HandleInertiaRequests -> App\Domain\Shared\Services\NavigationService).
+ *
+ * docs/architecture.md §3.2: this component is Foundation-owned and no
+ * module may edit it directly to add a nav entry — a module adds its own
+ * `config/modules/<module>-nav.php` instead, and it shows up here
+ * automatically once NavigationService picks it up. Visibility here is a
+ * UX convenience only; the real access boundary is each route's own
+ * Policy/Gate check (hard constraint: "hiding a menu item is never
+ * sufficient").
+ */
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
-import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -14,29 +26,22 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { resolveNavIcon } from '@/lib/navIcons';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+const page = usePage();
 
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
-    },
-];
+const navGroups = computed(() =>
+    page.props.navGroups.map((group) => ({
+        group: group.group,
+        items: group.items.map((item): NavItem => ({
+            title: item.label,
+            href: item.href,
+            icon: resolveNavIcon(item.icon),
+        })),
+    })),
+);
 </script>
 
 <template>
@@ -54,11 +59,15 @@ const footerNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <NavMain
+                v-for="group in navGroups"
+                :key="group.group"
+                :label="group.group"
+                :items="group.items"
+            />
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

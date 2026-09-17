@@ -15,6 +15,15 @@ export default defineConfig({
                 bunny('Instrument Sans', {
                     weights: [400, 500, 600],
                 }),
+                // Georgian glyph coverage (DEC-046, docs/decisions.md): Instrument
+                // Sans only ships Latin glyphs, so Georgian text would silently
+                // fall back to the OS default font without this. Listed second in
+                // --font-sans (app.css) so Latin still renders in Instrument Sans
+                // and only Georgian codepoints fall through to this family.
+                bunny('Noto Sans Georgian', {
+                    subsets: ['georgian'],
+                    weights: [400, 500, 600, 700],
+                }),
             ],
         }),
         inertia(),

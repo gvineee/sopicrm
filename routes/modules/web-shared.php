@@ -18,6 +18,21 @@ Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    // Reserved mobile bottom-nav slot "დღეს" (lib/mobileNav.ts). Placeholder
+    // composition owned by Shared/Foundation until Tasks/Attendance wire
+    // real data in — see docs/decisions.md DEC-050.
+    Route::inertia('my-day', 'MyDay')->name('my-day');
 });
+
+if (app()->environment(['local', 'testing'])) {
+    // QA-only aliases (no auth) so a headless browser can screenshot the
+    // real page components at multiple viewport widths without needing a
+    // logged-in session — see docs/decisions.md DEC-050. Never registered
+    // outside local/testing; render the identical Dashboard/MyDay page
+    // components used by the real, auth-gated routes above.
+    Route::inertia('design-system/dashboard', 'Dashboard')->name('design-system.dashboard');
+    Route::inertia('design-system/my-day', 'MyDay')->name('design-system.my-day');
+}
 
 require __DIR__.'/../settings.php';

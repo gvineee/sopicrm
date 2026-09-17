@@ -99,6 +99,33 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        // Dedicated connection for the RLS integration suite ONLY
+        // (tests/Feature/Auth/TenantIsolationRlsTest.php) — connects as the
+        // real, restricted `oda_app` runtime role (never a superuser) to a
+        // real Postgres database, per spec section 18/23's explicit
+        // requirement to test RLS "with a real runtime DB role," not just
+        // assert the policy definition. Defaults match the exact
+        // credentials docs/decisions.md DEC-026 already provisions for
+        // local dev (`oda_app`/`secret`) and .github/workflows/ci.yml's
+        // Postgres service container, but against its OWN isolated
+        // database (`oda_crm_test`, not the shared dev `oda_crm`), per
+        // docs/architecture.md §3.5 ("local iteration ... must use its own
+        // isolated ... ephemeral Postgres test database, never the shared
+        // dev database"). Every value is still env-overridable for a
+        // developer whose local role/db differs.
+        'pgsql_rls_test' => [
+            'driver' => 'pgsql',
+            'host' => env('RLS_TEST_DB_HOST', '127.0.0.1'),
+            'port' => env('RLS_TEST_DB_PORT', '5432'),
+            'database' => env('RLS_TEST_DB_DATABASE', 'oda_crm_test'),
+            'username' => env('RLS_TEST_DB_USERNAME', 'oda_app'),
+            'password' => env('RLS_TEST_DB_PASSWORD', 'secret'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

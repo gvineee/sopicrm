@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Shared\Services\NavigationService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -42,6 +43,10 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // docs/architecture.md §3.2/§7: the desktop nav is server-driven
+            // and permission-filtered here, not hardcoded per page — see
+            // App\Domain\Shared\Services\NavigationService.
+            'navGroups' => fn () => app(NavigationService::class)->groupsForUser($request->user()),
         ];
     }
 }

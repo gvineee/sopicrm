@@ -63,25 +63,25 @@ Cross-reference: `docs/architecture.md` (how), `docs/data-model.md` (schema), `d
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-EMP-01 | Employee CRUD form (internal code, name, phone, restricted-visibility personal ID, optional photo, position, skills, team, supervisor, employment dates, status, site assignment periods, emergency contact, permission-gated documents) | P1 | not-started |
-| REQ-EMP-02 | Employee vs. login account separation; HR-initiated invite flow with time-limited one-time link; no shared accounts | P1 | not-started |
-| REQ-EMP-03 | RateHistory CRUD (hourly/daily, amount, currency, effective_from/to, optional project override, reason, approver) with DB-level non-overlap exclusion constraint | P1 | not-started |
-| REQ-EMP-04 | Rate resolution service: project rate → base rate priority; block accrual (not default to zero) when no applicable rate exists | P1 | not-started |
-| REQ-EMP-05 | Employment termination workflow: deactivate login, schedule credential revocation on all relevant devices, surface unreturned tools; historical attendance/financial data untouched; no automatic tool-cost deduction | P1 | not-started |
-| REQ-EMP-06 | Team / TeamMembership management (foreman assignment, single active team per employee) | P1 | not-started |
-| REQ-EMP-07 | EmployeeProjectAssignment periods | P1 | not-started |
-| REQ-EMP-08 | Employees module Policies (HR/owner/system-admin scoped; salary/personal-ID visibility gated by separate permission) | P1 | not-started |
-| REQ-EMP-09 | Pest tests: rate overlap rejection, rate resolution priority, accrual-blocked-when-no-rate, termination side effects | P1 | not-started |
+| REQ-EMP-01 | Employee CRUD form (internal code, name, phone, restricted-visibility personal ID, optional photo, position, skills, team, supervisor, employment dates, status, site assignment periods, emergency contact, permission-gated documents) | P1 | done |
+| REQ-EMP-02 | Employee vs. login account separation; HR-initiated invite flow with time-limited one-time link; no shared accounts | P1 | done |
+| REQ-EMP-03 | RateHistory CRUD (hourly/daily, amount, currency, effective_from/to, optional project override, reason, approver) with DB-level non-overlap exclusion constraint | P1 | done |
+| REQ-EMP-04 | Rate resolution service: project rate → base rate priority; block accrual (not default to zero) when no applicable rate exists | P1 | done |
+| REQ-EMP-05 | Employment termination workflow: deactivate login, schedule credential revocation on all relevant devices, surface unreturned tools; historical attendance/financial data untouched; no automatic tool-cost deduction | P1 | done |
+| REQ-EMP-06 | Team / TeamMembership management (foreman assignment, single active team per employee) | P1 | done |
+| REQ-EMP-07 | EmployeeProjectAssignment periods | P1 | done |
+| REQ-EMP-08 | Employees module Policies (HR/owner/system-admin scoped; salary/personal-ID visibility gated by separate permission) | P1 | done |
+| REQ-EMP-09 | Pest tests: rate overlap rejection, rate resolution priority, accrual-blocked-when-no-rate, termination side effects | P1 | done |
 
 ## REQ-DEV — Devices, Credentials & Suprema Simulator (spec §6)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
 | REQ-DEV-01 | `services/device-connector` process skeleton with versioned, authenticated (Sanctum machine token) contract to Laravel; no public device ports; browser never talks to devices directly | P0 | not-started |
-| REQ-DEV-02 | `DeviceAdapterInterface` + Simulator adapter, permanently labeled "სატესტო რეჟიმი" in UI wherever its data appears | P0 | not-started |
-| REQ-DEV-03 | Real Suprema adapter behind the same interface, targeting G-SDK Device/User/Event APIs; capability read from device, never hardcoded | P0/P1 | not-started |
-| REQ-DEV-04 | Device CRUD + status model (online/offline/degraded/unknown) with independent sync_status; capability snapshot storage | P0/P1 | not-started |
-| REQ-DEV-05 | Credential CRUD preserving raw bytes/length/leading zeros; documented decimal/hex/byte-order adapter conversion | P1 | not-started |
+| REQ-DEV-02 | `DeviceAdapterInterface` + Simulator adapter, permanently labeled "სატესტო რეჟიმი" in UI wherever its data appears | P0 | in-progress |
+| REQ-DEV-03 | Real Suprema adapter behind the same interface, targeting G-SDK Device/User/Event APIs; capability read from device, never hardcoded | P0/P1 | in-progress |
+| REQ-DEV-04 | Device CRUD + status model (online/offline/degraded/unknown) with independent sync_status; capability snapshot storage | P0/P1 | in-progress |
+| REQ-DEV-05 | Credential CRUD preserving raw bytes/length/leading zeros; documented decimal/hex/byte-order adapter conversion | P1 | in-progress |
 | REQ-DEV-06 | CredentialAssignment with DB-enforced single-active-assignment-per-credential; historical event attribution by assignment validity window, not current pointer | P1 | not-started |
 | REQ-DEV-07 | Unmatched/unknown card triage record; never auto-creates an Employee | P1 | not-started |
 | REQ-DEV-08 | DeviceSyncCommand queue: pending→processing→succeeded/failed/retry/dead-letter; idempotency key + monotonic command_version so stale retries can't overwrite newer commands | P0/P1 | not-started |
@@ -93,7 +93,7 @@ Cross-reference: `docs/architecture.md` (how), `docs/data-model.md` (schema), `d
 | REQ-DEV-14 | Local-first access decision design note (WAN-independent door decisions) + documented limitation that offline revocation can't propagate instantly | P1 | not-started |
 | REQ-DEV-15 | BioStar migration plan doc: read-only inventory/export + card mapping first, single test-reader pilot second, single system-of-record + rollback plan, no dual independent writers | P1 (planning only) | not-started |
 | REQ-DEV-16 | P0 pilot acceptance scenario: employee → card assignment → reader confirmation → event received → revocation confirmed, including outage/replay test | P0 | not-started |
-| REQ-DEV-17 | Devices module Policies + Pest/integration tests (idempotency, dedup, epoch rollover, revocation-not-shown-as-complete-when-offline) | P0/P1 | not-started |
+| REQ-DEV-17 | Devices module Policies + Pest/integration tests (idempotency, dedup, epoch rollover, revocation-not-shown-as-complete-when-offline) | P0/P1 | in-progress |
 
 ## REQ-ATT — Attendance, Sessions & Anomalies (spec §7 raw/session/anomaly part)
 

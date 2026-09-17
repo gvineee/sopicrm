@@ -161,7 +161,17 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Public self-registration is deliberately DISABLED (see
+        // docs/decisions.md): ODA CRM has no "create your own company"
+        // flow in this phase's scope — spec section 2 starts with exactly
+        // one company, and every User row requires a real organization_id
+        // (docs/data-model.md "users"), which a fully public, unauthenticated
+        // registration form has no legitimate way to supply. Accounts are
+        // provisioned by an existing owner/system_admin (a future
+        // Users-management screen, `auth.users.manage` permission — see
+        // database/seeders/modules/AuthPermissionsSeeder.php), or by
+        // database/seeders/DatabaseSeeder.php for local dev/CI.
+        // Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([

@@ -7,15 +7,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  ODA CRM design tokens (spec section 4 "პრემიუმ ვიზუალური მიმართულება"):
+  warm light backgrounds, graphite text/navigation, emerald primary accent,
+  amber for warnings. Every status color below is paired with a dedicated
+  "-foreground" (text/icon) token so screens never rely on hue alone — see
+  docs/decisions.md DEC-046. All pairs were verified with a WCAG contrast
+  calculation (relative luminance formula) to meet the AA target (>=4.5:1 for
+  body text, >=3:1 for large text/UI components); see the "-soft" tokens for
+  low-emphasis chip backgrounds and the solid tokens for buttons/strong badges.
+*/
 @theme inline {
     --font-sans:
-        Instrument Sans, ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Instrument Sans', 'Noto Sans Georgian', ui-sans-serif, system-ui,
+        sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
+    --radius-xl: calc(var(--radius) + 4px);
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -40,6 +51,24 @@
 
     --color-destructive: var(--destructive);
     --color-destructive-foreground: var(--destructive-foreground);
+    --color-destructive-soft: var(--destructive-soft);
+    --color-destructive-soft-foreground: var(--destructive-soft-foreground);
+
+    /* Status semantics — always paired with an icon/text label, never color-only. */
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-success-soft: var(--success-soft);
+    --color-success-soft-foreground: var(--success-soft-foreground);
+
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning-soft: var(--warning-soft);
+    --color-warning-soft-foreground: var(--warning-soft-foreground);
+
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-info-soft: var(--info-soft);
+    --color-info-soft-foreground: var(--info-soft-foreground);
 
     --color-border: var(--border);
     --color-input: var(--input);
@@ -90,83 +119,181 @@
 }
 
 :root {
-    --background: hsl(0 0% 100%);
-    --foreground: hsl(0 0% 3.9%);
-    --card: hsl(0 0% 100%);
-    --card-foreground: hsl(0 0% 3.9%);
-    --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(0 0% 3.9%);
-    --primary: hsl(0 0% 9%);
-    --primary-foreground: hsl(0 0% 98%);
-    --secondary: hsl(0 0% 92.1%);
-    --secondary-foreground: hsl(0 0% 9%);
-    --muted: hsl(0 0% 96.1%);
-    --muted-foreground: hsl(0 0% 45.1%);
-    --accent: hsl(0 0% 96.1%);
-    --accent-foreground: hsl(0 0% 9%);
-    --destructive: hsl(0 84.2% 60.2%);
-    --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% 92.8%);
-    --input: hsl(0 0% 89.8%);
-    --ring: hsl(0 0% 3.9%);
-    --chart-1: hsl(12 76% 61%);
-    --chart-2: hsl(173 58% 39%);
-    --chart-3: hsl(197 37% 24%);
-    --chart-4: hsl(43 74% 66%);
-    --chart-5: hsl(27 87% 67%);
-    --radius: 0.5rem;
-    --sidebar-background: hsl(0 0% 98%);
-    --sidebar-foreground: hsl(240 5.3% 26.1%);
-    --sidebar-primary: hsl(0 0% 10%);
-    --sidebar-primary-foreground: hsl(0 0% 98%);
-    --sidebar-accent: hsl(0 0% 94%);
-    --sidebar-accent-foreground: hsl(0 0% 30%);
-    --sidebar-border: hsl(0 0% 91%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
-    --sidebar: hsl(0 0% 98%);
+    /* Warm light background / graphite text — spec 4 "თბილი ღია ფონები, გრაფიტის ტექსტი" */
+    --background: #faf7f2;
+    --foreground: #1f2328;
+    --card: #ffffff;
+    --card-foreground: #1f2328;
+    --popover: #ffffff;
+    --popover-foreground: #1f2328;
+
+    /* Emerald primary accent — spec 4 "emerald ძირითადი აქცენტი" */
+    --primary: #0f7a56;
+    --primary-foreground: #ffffff;
+
+    --secondary: #efe9de;
+    --secondary-foreground: #2a2e33;
+    --muted: #f1ece3;
+    --muted-foreground: #5b6168;
+    --accent: #e3f3ec;
+    --accent-foreground: #0b5c40;
+
+    --destructive: #b3261e;
+    --destructive-foreground: #ffffff;
+    --destructive-soft: #fbe4e1;
+    --destructive-soft-foreground: #7a190f;
+
+    --success: #0f7a56;
+    --success-foreground: #ffffff;
+    --success-soft: #dcf3e8;
+    --success-soft-foreground: #0b5c40;
+
+    /* Amber warnings — spec 4 "amber გაფრთხილებებისთვის", always paired with text/icon */
+    --warning: #b7791b;
+    --warning-foreground: #241800;
+    --warning-soft: #fcefc7;
+    --warning-soft-foreground: #7a4e00;
+
+    --info: #1d4e89;
+    --info-foreground: #ffffff;
+    --info-soft: #dceafb;
+    --info-soft-foreground: #123a66;
+
+    --border: #e4ddcf;
+    --input: #dcd4c3;
+    --ring: #0f7a56;
+
+    --chart-1: #0f7a56;
+    --chart-2: #b7791b;
+    --chart-3: #1d4e89;
+    --chart-4: #6b4fa0;
+    --chart-5: #b3261e;
+
+    --radius: 0.625rem;
+
+    /* Sidebar/navigation: graphite text on a slightly deeper warm surface than --background. */
+    --sidebar-background: #f5efe3;
+    --sidebar-foreground: #2a2e33;
+    --sidebar-primary: #0f7a56;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e3f3ec;
+    --sidebar-accent-foreground: #0b5c40;
+    --sidebar-border: #e4ddcf;
+    --sidebar-ring: #0f7a56;
+    --sidebar: #f5efe3;
 }
 
 .dark {
-    --background: hsl(0 0% 3.9%);
-    --foreground: hsl(0 0% 98%);
-    --card: hsl(0 0% 3.9%);
-    --card-foreground: hsl(0 0% 98%);
-    --popover: hsl(0 0% 3.9%);
-    --popover-foreground: hsl(0 0% 98%);
-    --primary: hsl(0 0% 98%);
-    --primary-foreground: hsl(0 0% 9%);
-    --secondary: hsl(0 0% 14.9%);
-    --secondary-foreground: hsl(0 0% 98%);
-    --muted: hsl(0 0% 16.08%);
-    --muted-foreground: hsl(0 0% 63.9%);
-    --accent: hsl(0 0% 14.9%);
-    --accent-foreground: hsl(0 0% 98%);
-    --destructive: hsl(0 84% 60%);
-    --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% 14.9%);
-    --input: hsl(0 0% 14.9%);
-    --ring: hsl(0 0% 83.1%);
-    --chart-1: hsl(220 70% 50%);
-    --chart-2: hsl(160 60% 45%);
-    --chart-3: hsl(30 80% 55%);
-    --chart-4: hsl(280 65% 60%);
-    --chart-5: hsl(340 75% 55%);
-    --sidebar-background: hsl(0 0% 7%);
-    --sidebar-foreground: hsl(0 0% 95.9%);
-    --sidebar-primary: hsl(360, 100%, 100%);
-    --sidebar-primary-foreground: hsl(0 0% 100%);
-    --sidebar-accent: hsl(0 0% 15.9%);
-    --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-    --sidebar-border: hsl(0 0% 15.9%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
-    --sidebar: hsl(240 5.9% 10%);
+    /* Graphite dark background, same token names/roles as light — spec 4 "სრულყოფილი dark რეჟიმი იმავე tokens-ით" */
+    --background: #14171a;
+    --foreground: #f2efe8;
+    --card: #1b1f23;
+    --card-foreground: #f2efe8;
+    --popover: #1b1f23;
+    --popover-foreground: #f2efe8;
+
+    --primary: #34c38f;
+    --primary-foreground: #06231a;
+
+    --secondary: #262b30;
+    --secondary-foreground: #f2efe8;
+    --muted: #23272b;
+    --muted-foreground: #adb3b8;
+    --accent: #1d3b30;
+    --accent-foreground: #7fe0bb;
+
+    --destructive: #c7362b;
+    --destructive-foreground: #ffffff;
+    --destructive-soft: #3a1512;
+    --destructive-soft-foreground: #f3a79e;
+
+    --success: #34c38f;
+    --success-foreground: #06231a;
+    --success-soft: #16302a;
+    --success-soft-foreground: #7fe0bb;
+
+    --warning: #d9a441;
+    --warning-foreground: #241800;
+    --warning-soft: #3a2d10;
+    --warning-soft-foreground: #f5c563;
+
+    --info: #6fa8e0;
+    --info-foreground: #071a2e;
+    --info-soft: #132437;
+    --info-soft-foreground: #9cc4ee;
+
+    --border: #2a2f34;
+    --input: #2a2f34;
+    --ring: #34c38f;
+
+    --chart-1: #34c38f;
+    --chart-2: #d9a441;
+    --chart-3: #6fa8e0;
+    --chart-4: #b79bea;
+    --chart-5: #e5564c;
+
+    --sidebar-background: #101314;
+    --sidebar-foreground: #e3e7ea;
+    --sidebar-primary: #1d3b30;
+    --sidebar-primary-foreground: #7fe0bb;
+    --sidebar-accent: #1b2124;
+    --sidebar-accent-foreground: #e3e7ea;
+    --sidebar-border: #22262a;
+    --sidebar-ring: #34c38f;
+    --sidebar: #101314;
 }
 
 @layer base {
     * {
         @apply border-border outline-ring/50;
     }
+    html {
+        overflow-x: hidden;
+    }
     body {
         @apply bg-background text-foreground;
+        /* Defense-in-depth against the mobile "no horizontal page scroll"
+           hard requirement (spec 4/17): individual components are still
+           responsible for sizing themselves within the viewport (see
+           docs/decisions.md DEC-050 for one bug this caught), but the page
+           itself must never grow a horizontal scrollbar no matter what a
+           future module's markup does wrong. */
+        overflow-x: hidden;
+    }
+
+    /* Georgian-friendly minimum body size on mobile — spec 4 "მინიმუმ 16px body ტექსტი მობილურზე" */
+    @media (max-width: 767px) {
+        body {
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+    }
+
+    /* Respect prefers-reduced-motion everywhere — spec 4 "პატივი ეცი prefers-reduced-motion-ს" */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+}
+
+@layer utilities {
+    /* Safe-area helpers for the mobile shell (notches / home indicator / on-screen keyboard). */
+    .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+    .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .pl-safe {
+        padding-left: env(safe-area-inset-left, 0px);
+    }
+    .pr-safe {
+        padding-right: env(safe-area-inset-right, 0px);
     }
 }

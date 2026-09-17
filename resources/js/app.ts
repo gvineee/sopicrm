@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
+import { registerServiceWorker } from '@/lib/pwa';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -31,3 +32,7 @@ initializeTheme();
 
 // This will listen for flash toast data from the server...
 initializeFlashToast();
+
+// Installable PWA shell (spec section 17) — safe to call unconditionally,
+// registerServiceWorker() itself feature-detects `serviceWorker in navigator`.
+registerServiceWorker();

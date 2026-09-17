@@ -42,6 +42,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Machine/API identities (docs/architecture.md §1 DEC-009): scoped
+        // Sanctum personal access tokens for services/device-connector and
+        // future server-to-server integrations. Registered by Sanctum's own
+        // service provider; listed here explicitly so `auth:sanctum` route
+        // middleware has a guard to resolve.
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => null,
+        ],
     ],
 
     /*
@@ -63,7 +73,13 @@ return [
 
     'providers' => [
         'users' => [
-            'driver' => 'eloquent',
+            // 'active-eloquent' (registered by
+            // App\Providers\Auth\AuthModuleServiceProvider) instead of the
+            // default 'eloquent' driver — see
+            // App\Domain\Auth\Support\ActiveUserProvider's docblock: a
+            // deactivated user (`is_active = false`) must not be able to
+            // authenticate.
+            'driver' => 'active-eloquent',
             'model' => env('AUTH_MODEL', User::class),
         ],
 
