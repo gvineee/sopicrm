@@ -1,0 +1,24 @@
+# Laravel scheduler tick (production). See docs/deployment.md §3.
+#
+# This is the systemd-timer equivalent of the classic cron entry
+# `* * * * * php artisan schedule:run` — a oneshot unit triggered every
+# minute by oda-crm-schedule.timer (same directory). This is what actually
+# runs `Schedule::command('outbox:relay')->everyMinute()` from
+# routes/console.php in production; nothing runs it without this.
+#
+# Install:
+#   sudo cp infra/systemd/oda-crm-schedule.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now oda-crm-schedule.timer
+#   systemctl list-timers oda-crm-schedule.timer   # confirm it's scheduled
+
+[Unit]
+Description=ODA CRM - Laravel scheduler tick (triggered by oda-crm-schedule.timer)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=oneshot
+User=oda-crm
+Group=oda-crm
+WorkingDirectory=/var/www/oda-crm
+ExecStart=/usr/bin/php artisan schedule:run

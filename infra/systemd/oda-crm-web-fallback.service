@@ -1,0 +1,34 @@
+# FALLBACK ONLY — read docs/deployment.md §3 before using this.
+#
+# The correct production web path is nginx + php-fpm (docs/deployment.md
+# §3.1), NOT `php artisan serve`. `artisan serve` is PHP's built-in
+# single-threaded development server (see infra/docker/php/Dockerfile's own
+# comment: "NOT a production image") — it has no opcache tuning, handles one
+# request at a time, and is not hardened for public exposure.
+#
+# This unit exists only for a genuinely minimal single-box deployment where
+# installing/configuring php-fpm + nginx is not yet done and something needs
+# to be live behind a reverse proxy (e.g. Caddy/nginx doing only TLS
+# termination + reverse_proxy to 127.0.0.1:8000) in the meantime. Replace it
+# with php-fpm as soon as practical.
+#
+# Install:
+#   sudo cp infra/systemd/oda-crm-web-fallback.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now oda-crm-web-fallback.service
+
+[Unit]
+Description=ODA CRM - Laravel web (artisan serve fallback, NOT recommended for real load)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=oda-crm
+Group=oda-crm
+WorkingDirectory=/var/www/oda-crm
+ExecStart=/usr/bin/php artisan serve --host=127.0.0.1 --port=8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

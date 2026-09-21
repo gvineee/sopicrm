@@ -1,0 +1,33 @@
+# Laravel queue worker (production). See docs/deployment.md §3.
+#
+# Linux VPS assumed — uses plain `php` on PATH, unlike this Windows dev
+# machine's Herd-specific path (C:\Users\...\herd\bin\php84\php.exe), which
+# has no meaning on a real server.
+#
+# Install:
+#   sudo cp infra/systemd/oda-crm-queue.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now oda-crm-queue.service
+#
+# --max-time restarts the worker periodically so it picks up a fresh opcache
+# / deployed code without needing a full systemd restart on every release;
+# Restart=always brings it back up immediately after that clean exit.
+
+[Unit]
+Description=ODA CRM - Laravel queue worker
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=oda-crm
+Group=oda-crm
+WorkingDirectory=/var/www/oda-crm
+ExecStart=/usr/bin/php artisan queue:work redis --tries=3 --backoff=5 --max-time=3600 --sleep=3
+Restart=always
+RestartSec=5
+# Give a currently-processing job a chance to finish before a forceful kill
+# on deploy/restart (matches `php artisan queue:restart`'s own intent).
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

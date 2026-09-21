@@ -1,0 +1,13 @@
+# Fires oda-crm-schedule.service every minute. See oda-crm-schedule.service
+# and docs/deployment.md §3.
+
+[Unit]
+Description=ODA CRM - run the Laravel scheduler every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
