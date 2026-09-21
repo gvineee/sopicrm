@@ -6,9 +6,11 @@ namespace App\Models;
 use App\Domain\Auth\Models\Membership;
 use App\Domain\Auth\Models\Organization;
 use App\Domain\Auth\Models\ProjectMembership;
+use App\Domain\Auth\Support\PermissionDenialCache;
 use App\Domain\Companies\Models\Company;
 use App\Domain\Companies\Models\CompanyMembership;
 use App\Domain\Shared\Concerns\HasVersion;
+use App\Domain\Shared\Services\CurrentOrganization;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -75,7 +77,15 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasRoles, HasUuids, HasVersion, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, HasRoles, HasUuids, HasVersion, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable {
+        // ADMIN-02: HasRoles composes spatie's HasPermissions trait, which
+        // defines hasPermissionTo() — aliased here so this class's own
+        // override (below) can still reach the original spatie logic after
+        // consulting the deny-override list first. `parent::` cannot be
+        // used for a trait method (traits are not part of the real PHP
+        // inheritance chain), hence this alias.
+        HasRoles::hasPermissionTo as private spatieHasPermissionTo;
+    }
 
     public $incrementing = false;
 
@@ -165,5 +175,36 @@ class User extends Authenticatable implements PasskeyUser
             ->where('project_id', $projectId)
             ->whereNull('removed_at')
             ->exists();
+    }
+
+    /**
+     * ADMIN-02: overrides spatie's HasPermissions::hasPermissionTo() to
+     * consult the deny-override list first. This is NOT redundant with
+     * App\Providers\AppServiceProvider::boot()'s deny-check Gate::before —
+     * spatie/laravel-permission registers its OWN Gate::before
+     * (PermissionRegistrar::registerPermissions(), wired up the first time
+     * Gate::class is ever resolved from the container) that calls
+     * `$user->checkPermissionTo($ability)` and returns `true` immediately
+     * the moment a role/direct grant provides the permission. That `true`
+     * short-circuits Gate::raw() before ANY later-registered Gate::before
+     * callback (including this app's own deny-check) ever runs, regardless
+     * of registration order — the only way to make a deny actually win for
+     * a role-granted permission is to intercept spatie's own resolution
+     * path directly, here. `checkPermissionTo()` (also spatie's) simply
+     * wraps this method in a try/catch, so overriding this one method
+     * covers both.
+     */
+    public function hasPermissionTo(mixed $permission, ?string $guardName = null): bool
+    {
+        if (is_string($permission)) {
+            $organizationId = CurrentOrganization::id();
+
+            if ($organizationId !== null
+                && in_array($permission, PermissionDenialCache::deniedPermissionNames($organizationId, $this->id), true)) {
+                return false;
+            }
+        }
+
+        return $this->spatieHasPermissionTo($permission, $guardName);
     }
 }

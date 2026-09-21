@@ -29,6 +29,14 @@ class AuthPermissionsSeeder extends Seeder
             'auth.users.view',
             'auth.users.manage',
             'auth.roles.assign',
+            // ADMIN-02: distinct from auth.roles.assign (picking from the
+            // fixed 11-role catalog) — this gates the finer-grained,
+            // higher-blast-radius per-user grant/deny permission-override
+            // mechanism (App\Domain\Auth\Actions\{Grant,Revoke}UserPermissionOverrideAction,
+            // {Deny,RemoveUserPermissionDenial}Action). Starts granted to the
+            // same two roles as auth.roles.assign but is kept separate so it
+            // can be independently granted/withheld in the future.
+            'auth.permissions.override',
             'auth.tokens.issue-machine',
             'audit.events.view',
             'audit.events.export',
@@ -51,12 +59,14 @@ class AuthPermissionsSeeder extends Seeder
         $grants = [
             'owner' => [
                 'auth.users.view', 'auth.users.manage', 'auth.roles.assign',
+                'auth.permissions.override',
                 'auth.tokens.issue-machine', 'audit.events.view', 'audit.events.export',
                 'projects.memberships.manage', 'finance.access',
                 'companies.view', 'companies.manage',
             ],
             'system_admin' => [
                 'auth.users.view', 'auth.users.manage', 'auth.roles.assign',
+                'auth.permissions.override',
                 'auth.tokens.issue-machine', 'audit.events.view',
                 'companies.view', 'companies.manage',
                 // deliberately NOT 'finance.access', NOT 'audit.events.export'
