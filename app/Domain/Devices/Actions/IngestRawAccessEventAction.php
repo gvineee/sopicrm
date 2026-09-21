@@ -7,6 +7,7 @@ use App\Domain\Attendance\Models\RawAccessEvent;
 use App\Domain\Devices\Models\Credential;
 use App\Domain\Devices\Models\Device;
 use App\Domain\Devices\Models\DeviceCheckpoint;
+use App\Domain\Devices\Models\ExternalIdentifierMapping;
 use App\Domain\Devices\Services\CardIdentifierNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,10 @@ class IngestRawAccessEventAction
             $rawDeviceTime = CarbonImmutable::parse($eventData['raw_device_time'])->utc();
             $payload = $eventData['payload'] ?? [];
             [$credential, $unmatchedReference] = $this->resolveCredential($eventData);
+
+            if ($unmatchedReference !== null) {
+                $this->registerUnmatchedCardForTriage($unmatchedReference);
+            }
 
             $checkpoint = DeviceCheckpoint::query()
                 ->where('device_id', $device->id)
@@ -82,7 +87,7 @@ class IngestRawAccessEventAction
             $this->detectClockDrift($device, $event, $credential, $eventData['clock_offset_seconds'] ?? null);
             $this->advanceCheckpoint($device, $checkpoint, $streamEpoch, $nativeEventId);
 
-            $device->update(['last_event_at' => now()]);
+            $device->update(['last_event_at' => now(), 'last_seen_at' => now()]);
 
             return $event;
         });
@@ -113,6 +118,26 @@ class IngestRawAccessEventAction
             ->first();
 
         return [$credential, $credential === null ? "{$normalized->cardType}:{$normalized->rawBytesHex}" : null];
+    }
+
+    /**
+     * BIO-02: makes an unmatched card DISCOVERABLE on an admin triage page
+     * instead of only visible by manually scanning `raw_access_events`. Does
+     * NOT create an Employee or a Credential — this is a durable "we saw
+     * this" marker only; `firstOrCreate` keeps a repeat swipe of the same
+     * still-unrecognized card from spamming a new triage row every time.
+     */
+    private function registerUnmatchedCardForTriage(string $reference): void
+    {
+        ExternalIdentifierMapping::query()->firstOrCreate(
+            [
+                'source_system' => 'biostar',
+                'source_instance_key' => 'default',
+                'external_type' => 'card',
+                'external_identifier' => $reference,
+            ],
+            ['status' => 'pending', 'first_seen_at' => now()],
+        );
     }
 
     private function detectStreamAnomalies(

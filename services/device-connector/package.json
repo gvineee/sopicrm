@@ -1,15 +1,19 @@
 {
   "name": "device-connector",
-  "version": "0.0.0-placeholder",
+  "version": "1.0.0",
   "private": true,
-  "description": "Placeholder process for the Suprema device-connector service. See README.md — no real device/G-SDK integration exists yet.",
+  "description": "Internal authenticated Laravel connector worker with simulator and Suprema adapter boundaries.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "echo \"no tests yet — placeholder service\" && exit 0"
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.1",
+    "undici": "^7.29.1"
   }
 }

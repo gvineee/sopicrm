@@ -9,7 +9,6 @@ use App\Domain\Devices\Models\DeviceCheckpoint;
 use App\Domain\Devices\Models\Site;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Services\CurrentOrganization;
-use LogicException;
 
 pest()->group('devices');
 

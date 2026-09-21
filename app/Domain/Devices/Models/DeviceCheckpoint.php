@@ -4,6 +4,7 @@ namespace App\Domain\Devices\Models;
 
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
+use Carbon\CarbonInterface;
 use Database\Factories\DeviceCheckpointFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * docs/data-model.md "device_checkpoints" (spec section 6): resume point for
  * event ingestion after a network outage, overlapping-batch-safe via
  * `raw_access_events`' own dedup constraint.
+ *
+ * @property int $stream_epoch
+ * @property int $last_native_event_id
+ * @property CarbonInterface|null $last_confirmed_at
  */
 class DeviceCheckpoint extends Model
 {

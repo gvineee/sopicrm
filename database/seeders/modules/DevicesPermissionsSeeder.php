@@ -17,6 +17,8 @@ class DevicesPermissionsSeeder extends Seeder
             'devices.credentials.manage',
             'devices.simulator.manage',
             'devices.connector.ingest',
+            'devices.external_mappings.view',
+            'devices.external_mappings.manage',
         ];
 
         foreach ($permissions as $permission) {
@@ -29,6 +31,11 @@ class DevicesPermissionsSeeder extends Seeder
         }
 
         Role::query()->where('name', 'hr')->whereNull('organization_id')->firstOrFail()
-            ->givePermissionTo(['devices.credentials.view', 'devices.credentials.manage']);
+            ->givePermissionTo([
+                'devices.credentials.view',
+                'devices.credentials.manage',
+                'devices.external_mappings.view',
+                'devices.external_mappings.manage',
+            ]);
     }
 }

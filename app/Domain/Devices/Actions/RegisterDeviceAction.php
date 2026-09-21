@@ -22,25 +22,31 @@ class RegisterDeviceAction
     ) {}
 
     /**
-     * @param  array{
-     *   site_id: string, serial_number: string, model: string,
-     *   firmware_version?: string|null, install_location?: string|null,
-     *   reader_role?: string, device_timezone?: string,
-     * }  $data
+     * @param  array<string, mixed>  $data
      */
     public function execute(array $data, ?User $actor = null): Device
     {
         $device = Device::create([
             'site_id' => $data['site_id'],
+            'name' => $data['name'] ?? $data['serial_number'],
+            'vendor' => $data['vendor'] ?? 'suprema',
             'serial_number' => $data['serial_number'],
+            'device_identifier' => $data['device_identifier'] ?? null,
+            'ip_address' => $data['ip_address'] ?? null,
+            'port' => $data['port'] ?? null,
+            'mac_address' => $data['mac_address'] ?? null,
             'model' => $data['model'],
             'firmware_version' => $data['firmware_version'] ?? null,
+            'hardware_version' => $data['hardware_version'] ?? null,
+            'connection_mode' => $data['connection_mode'] ?? 'gateway',
             'install_location' => $data['install_location'] ?? null,
             'reader_role' => $data['reader_role'] ?? 'unspecified',
-            'device_timezone' => $data['device_timezone'] ?? 'Asia/Tbilisi',
+            'device_timezone' => $data['timezone'] ?? $data['device_timezone'] ?? 'Asia/Tbilisi',
+            'timezone' => $data['timezone'] ?? $data['device_timezone'] ?? 'Asia/Tbilisi',
             'status' => 'unknown',
             'sync_status' => 'pending',
             'connector_version' => null,
+            'enabled' => $data['enabled'] ?? true,
         ]);
 
         $this->audit->log(action: 'devices.device.registered', target: $device, after: $device->only([

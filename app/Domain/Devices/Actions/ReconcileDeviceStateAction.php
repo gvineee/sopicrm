@@ -4,6 +4,7 @@ namespace App\Domain\Devices\Actions;
 
 use App\Domain\Devices\Models\Device;
 use App\Domain\Devices\Models\DeviceSyncCommand;
+use App\Domain\Devices\Services\DeviceSyncStatusResolver;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -22,7 +23,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ReconcileDeviceStateAction
 {
-    public function __construct(private readonly EnqueueDeviceSyncCommandAction $enqueue) {}
+    public function __construct(
+        private readonly EnqueueDeviceSyncCommandAction $enqueue,
+        private readonly DeviceSyncStatusResolver $syncStatusResolver,
+    ) {}
 
     /**
      * @return array{checked: int, corrected: int}
@@ -79,9 +83,7 @@ class ReconcileDeviceStateAction
             }
         }
 
-        $device->update([
-            'sync_status' => $corrected > 0 ? 'pending' : ($checked > 0 ? 'in_sync' : $device->sync_status),
-        ]);
+        $this->syncStatusResolver->refresh($device);
 
         return ['checked' => $checked, 'corrected' => $corrected];
     }

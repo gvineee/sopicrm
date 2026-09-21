@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property CarbonInterface|null $last_heartbeat_at
  * @property CarbonInterface|null $last_event_at
+ * @property CarbonInterface|null $last_seen_at
+ * @property CarbonInterface|null $last_sync_at
  */
 class Device extends Model
 {
@@ -33,24 +35,42 @@ class Device extends Model
     protected $fillable = [
         'organization_id',
         'site_id',
+        'name',
+        'vendor',
         'serial_number',
+        'device_identifier',
+        'ip_address',
+        'port',
+        'mac_address',
         'model',
         'firmware_version',
+        'hardware_version',
+        'connection_mode',
         'install_location',
         'reader_role',
         'device_timezone',
+        'timezone',
         'status',
         'last_heartbeat_at',
+        'last_seen_at',
         'last_event_at',
+        'last_sync_at',
         'sync_status',
         'connector_version',
+        'metadata',
+        'enabled',
     ];
 
     protected function casts(): array
     {
         return [
             'last_heartbeat_at' => 'datetime',
+            'last_seen_at' => 'datetime',
             'last_event_at' => 'datetime',
+            'last_sync_at' => 'datetime',
+            'metadata' => 'array',
+            'enabled' => 'boolean',
+            'port' => 'integer',
         ];
     }
 
@@ -76,6 +96,12 @@ class Device extends Model
     public function syncCommands(): HasMany
     {
         return $this->hasMany(DeviceSyncCommand::class);
+    }
+
+    /** @return HasMany<Door, $this> */
+    public function doors(): HasMany
+    {
+        return $this->hasMany(Door::class);
     }
 
     /**

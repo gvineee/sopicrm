@@ -9,24 +9,24 @@ class DevicePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('devices.view');
+        return $user->hasRole('owner') || $user->can('devices.view');
     }
 
     public function view(User $user, Device $device): bool
     {
         return $device->organization_id === $user->organization_id
-            && $user->can('devices.view');
+            && ($user->hasRole('owner') || $user->can('devices.view'));
     }
 
     public function create(User $user): bool
     {
-        return $user->can('devices.manage');
+        return $user->hasRole('owner') || $user->can('devices.manage');
     }
 
     public function update(User $user, Device $device): bool
     {
         return $device->organization_id === $user->organization_id
-            && $user->can('devices.manage');
+            && ($user->hasRole('owner') || $user->can('devices.manage'));
     }
 
     public function operateSimulator(User $user, Device $device): bool

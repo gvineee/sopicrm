@@ -19,6 +19,7 @@ class RecordDeviceHeartbeatAction
 
         $device->update([
             'last_heartbeat_at' => now(),
+            'last_seen_at' => now(),
             'status' => $status,
         ]);
 

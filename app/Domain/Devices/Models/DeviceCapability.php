@@ -4,6 +4,7 @@ namespace App\Domain\Devices\Models;
 
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
+use Carbon\CarbonInterface;
 use Database\Factories\DeviceCapabilityFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * docs/data-model.md "device_capabilities" (spec section 6: "მოწყობილობის
  * მეხსიერების ზუსტი ლიმიტი არ გამოიგონო — წაიკითხე capability"). `read_at`
  * is when this snapshot was actually read live from the device.
+ *
+ * @property array<string, mixed> $capability_value
+ * @property CarbonInterface $read_at
  */
 class DeviceCapability extends Model
 {

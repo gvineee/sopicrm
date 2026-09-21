@@ -2,6 +2,7 @@
 
 namespace App\Domain\Devices\Adapters;
 
+use App\Domain\Devices\Contracts\AccessControlProviderInterface;
 use App\Domain\Devices\Contracts\DeviceAdapterInterface;
 use App\Domain\Devices\DataTransferObjects\DeviceCommandResult;
 use App\Domain\Devices\Exceptions\RealHardwareNotConfiguredException;
@@ -50,7 +51,7 @@ use Illuminate\Support\Collection;
  * runs must never be represented as real-hardware validation, and a
  * same-shaped "success" return from here would do exactly that silently.
  */
-final class SupremaGSdkAdapter implements DeviceAdapterInterface
+final class SupremaGSdkAdapter implements AccessControlProviderInterface, DeviceAdapterInterface
 {
     public function label(): string
     {

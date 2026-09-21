@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Auth\Models\Organization;
+use App\Domain\Devices\Actions\EnqueueDeviceSyncCommandAction;
 use App\Domain\Devices\Actions\IssueCredentialAction;
 use App\Domain\Devices\Actions\ProcessDeviceSyncCommandAction;
 use App\Domain\Devices\Actions\RegisterDeviceAction;
@@ -77,4 +78,28 @@ test('offline revocation remains pending and is never shown as acknowledged', fu
         ->and($state['desired'])->toBe('revoked')
         ->and($state['acknowledged'])->toBe('not_synced')
         ->and($state['is_pending'])->toBeTrue();
+});
+
+test('explicit operation keys make enqueue idempotent while later operations get monotonic versions', function () {
+    $site = Site::factory()->create(['organization_id' => $this->organization->id]);
+    $device = Device::factory()->create([
+        'organization_id' => $this->organization->id,
+        'site_id' => $site->id,
+    ]);
+    $employee = Employee::factory()->create(['organization_id' => $this->organization->id]);
+    $assignment = app(IssueCredentialAction::class)->execute(
+        app(CardIdentifierNormalizer::class)->fromHex('01020304', 'EM', 32),
+        $employee->id,
+        siteIds: [],
+    );
+    DeviceSyncCommand::query()->delete();
+
+    $enqueue = app(EnqueueDeviceSyncCommandAction::class);
+    $first = $enqueue->execute($device, 'add_user', ['employee_id' => $employee->id], $assignment, 'operation-1');
+    $replayed = $enqueue->execute($device, 'add_user', ['employee_id' => $employee->id], $assignment, 'operation-1');
+    $next = $enqueue->execute($device, 'revoke_credential', ['employee_id' => $employee->id], $assignment, 'operation-2');
+
+    expect($replayed->id)->toBe($first->id)
+        ->and($next->command_version)->toBe($first->command_version + 1)
+        ->and(DeviceSyncCommand::query()->count())->toBe(2);
 });

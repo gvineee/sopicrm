@@ -4,6 +4,7 @@ namespace App\Domain\Devices\Actions;
 
 use App\Domain\Devices\Contracts\DeviceAdapterInterface;
 use App\Domain\Devices\Models\DeviceSyncCommand;
+use App\Domain\Devices\Services\DeviceSyncStatusResolver;
 
 /**
  * Applies exactly ONE queued command and persists the outcome — the only
@@ -16,7 +17,10 @@ use App\Domain\Devices\Models\DeviceSyncCommand;
  */
 class ProcessDeviceSyncCommandAction
 {
-    public function __construct(private readonly DeviceAdapterInterface $adapter) {}
+    public function __construct(
+        private readonly DeviceAdapterInterface $adapter,
+        private readonly DeviceSyncStatusResolver $syncStatusResolver,
+    ) {}
 
     public function execute(DeviceSyncCommand $command): DeviceSyncCommand
     {
@@ -36,6 +40,7 @@ class ProcessDeviceSyncCommandAction
                 'status' => 'failed',
                 'last_error' => "superseded: a newer command (v{$latestSucceededVersion}) for this target has already succeeded",
             ]);
+            $this->syncStatusResolver->refresh($command->device);
 
             return $command->refresh();
         }
@@ -69,27 +74,8 @@ class ProcessDeviceSyncCommandAction
             ]);
         }
 
-        $this->refreshDeviceSyncStatus($command);
+        $this->syncStatusResolver->refresh($command->device);
 
         return $command->refresh();
-    }
-
-    private function refreshDeviceSyncStatus(DeviceSyncCommand $command): void
-    {
-        $device = $command->device;
-
-        $hasOutstanding = DeviceSyncCommand::query()
-            ->where('device_id', $device->id)
-            ->whereIn('status', ['pending', 'retry', 'processing'])
-            ->exists();
-
-        $hasError = DeviceSyncCommand::query()
-            ->where('device_id', $device->id)
-            ->where('status', 'dead_letter')
-            ->exists();
-
-        $device->update([
-            'sync_status' => $hasError ? 'error' : ($hasOutstanding ? 'pending' : 'in_sync'),
-        ]);
     }
 }

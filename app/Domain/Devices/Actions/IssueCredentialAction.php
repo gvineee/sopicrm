@@ -7,6 +7,7 @@ use App\Domain\Devices\Exceptions\DuplicateActiveCredentialAssignmentException;
 use App\Domain\Devices\Models\Credential;
 use App\Domain\Devices\Models\CredentialAssignment;
 use App\Domain\Devices\Models\Device;
+use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Services\AuditLogger;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -85,9 +86,17 @@ class IssueCredentialAction
 
             $credential->update(['status' => 'issued']);
 
+            // The connector process has no direct access to Laravel's own
+            // database — this payload must carry everything a real adapter
+            // needs to create/update the corresponding user on the vendor
+            // side without a callback, not just the credential fields.
+            $employee = Employee::query()->findOrFail($employeeId);
+
             foreach ($this->relevantDevices($siteIds) as $device) {
                 $this->enqueue->execute($device, 'add_user', [
                     'employee_id' => $employeeId,
+                    'employee_internal_code' => $employee->internal_code,
+                    'employee_name' => trim("{$employee->first_name} {$employee->last_name}"),
                     'card_type' => $credential->card_type,
                     'canonical_identifier' => $credential->canonical_identifier,
                 ], $assignment, "issue:{$assignment->id}");

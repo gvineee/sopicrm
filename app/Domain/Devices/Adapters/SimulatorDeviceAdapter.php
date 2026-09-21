@@ -2,6 +2,7 @@
 
 namespace App\Domain\Devices\Adapters;
 
+use App\Domain\Devices\Contracts\AccessControlProviderInterface;
 use App\Domain\Devices\Contracts\DeviceAdapterInterface;
 use App\Domain\Devices\DataTransferObjects\DeviceCommandResult;
 use App\Domain\Devices\Models\Device;
@@ -27,7 +28,7 @@ use Illuminate\Support\Collection;
  * flip between online/offline/degraded for a given device — there is no
  * hidden/ambient heartbeat loop pretending to be a real network.
  */
-final class SimulatorDeviceAdapter implements DeviceAdapterInterface
+final class SimulatorDeviceAdapter implements AccessControlProviderInterface, DeviceAdapterInterface
 {
     public function label(): string
     {
@@ -39,9 +40,7 @@ final class SimulatorDeviceAdapter implements DeviceAdapterInterface
         return true;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function readCapabilities(Device $device): array
     {
         return [
@@ -108,7 +107,17 @@ final class SimulatorDeviceAdapter implements DeviceAdapterInterface
      * "generate event" control — shaped exactly like what a real connector
      * would hand App\Domain\Devices\Actions\IngestRawAccessEventAction.
      *
-     * @return array<string, mixed>
+     * @return array{
+     *     native_event_id: int,
+     *     stream_epoch: int,
+     *     raw_device_time: string,
+     *     event_code: string,
+     *     event_subcode: null,
+     *     direction: string,
+     *     card_type: string|null,
+     *     card_hex: string|null,
+     *     payload: array{source: string, generated_at: string}
+     * }
      */
     public function generateEventPayload(
         Device $device,
