@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Providers\Assets;
+
+use App\Domain\Assets\Models\Asset;
+use App\Domain\Assets\Models\AssetIncident;
+use App\Domain\Assets\Models\CustodyTransaction;
+use App\Policies\AssetIncidentPolicy;
+use App\Policies\AssetPolicy;
+use App\Policies\CustodyTransactionPolicy;
+use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+
+/**
+ * Assets module's own registrations — auto-discovered by
+ * App\Providers\ModuleServiceProviderAggregator (docs/architecture.md §3.8).
+ */
+class AssetsModuleServiceProvider extends ServiceProvider
+{
+    /**
+     * @var array<class-string, class-string>
+     */
+    protected $policies = [
+        Asset::class => AssetPolicy::class,
+        CustodyTransaction::class => CustodyTransactionPolicy::class,
+        AssetIncident::class => AssetIncidentPolicy::class,
+    ];
+
+    public function boot(): void
+    {
+        $this->registerPolicies();
+    }
+}

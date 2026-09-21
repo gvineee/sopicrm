@@ -10,11 +10,16 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "asset_incidents" (spec section 9.5): a write-off
  * requires an authorized Approval record and never deletes the asset —
  * history remains.
+ */
+/**
+ * @property Carbon $occurred_at
+ * @property Carbon|null $decided_at
  */
 class AssetIncident extends Model
 {

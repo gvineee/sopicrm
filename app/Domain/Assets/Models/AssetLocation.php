@@ -10,12 +10,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "asset_locations". Exactly one `is_current=true` row
  * per asset (partial unique index) — history is preserved via non-current
  * rows, never overwritten.
  */
+/** @property Carbon $as_of */
 class AssetLocation extends Model
 {
     /** @use HasFactory<AssetLocationFactory> */

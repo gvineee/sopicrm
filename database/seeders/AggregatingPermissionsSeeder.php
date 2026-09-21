@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use Database\Seeders\Modules\AssetsPermissionsSeeder;
 use Database\Seeders\Modules\AttendancePermissionsSeeder;
 use Database\Seeders\Modules\AuthPermissionsSeeder;
 use Database\Seeders\Modules\ContractorsPermissionsSeeder;
@@ -54,6 +55,10 @@ class AggregatingPermissionsSeeder extends Seeder
         TimesheetsPermissionsSeeder::class,
         // Depends on Timesheets (PayRun calculation reads Timesheet data).
         PayrollPermissionsSeeder::class,
+        // Depends on Employees (receiving_employee_id) and Projects (project
+        // assignment on a custody transaction) — no permission-name
+        // collisions, ordered last.
+        AssetsPermissionsSeeder::class,
     ];
 
     public function run(): void

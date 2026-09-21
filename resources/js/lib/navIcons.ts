@@ -25,6 +25,7 @@ import {
     HelpCircle,
     IdCard,
     LayoutGrid,
+    Package,
     ShieldCheck,
     ShieldQuestion,
     Users,
@@ -49,6 +50,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     'hand-coins': HandCoins,
     'shield-question': ShieldQuestion,
     'shield-check': ShieldCheck,
+    package: Package,
 };
 
 /** Falls back to a generic icon rather than throwing on an unknown key. */

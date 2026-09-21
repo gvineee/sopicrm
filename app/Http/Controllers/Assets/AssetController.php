@@ -1,0 +1,123 @@
+<?php
+
+namespace App\Http\Controllers\Assets;
+
+use App\Domain\Assets\Actions\RegisterAssetAction;
+use App\Domain\Assets\Exceptions\AssetDomainException;
+use App\Domain\Assets\Models\Asset;
+use App\Domain\Assets\Models\AssetIncident;
+use App\Domain\Assets\Models\CustodyTransaction;
+use App\Domain\Employees\Models\Employee;
+use App\Domain\Shared\Services\PortableSearch;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Assets\StoreAssetRequest;
+use App\Http\Resources\Assets\AssetIncidentResource;
+use App\Http\Resources\Assets\AssetResource;
+use App\Http\Resources\Assets\CustodyTransactionResource;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * ASSETS-01. Thin controller: validate -> Domain Action -> Inertia, every
+ * Action re-checked by the real Policy (a hidden menu item is never itself
+ * the authorization boundary).
+ */
+class AssetController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $this->authorize('viewAny', Asset::class);
+
+        $search = $request->query('search');
+        $trackingType = $request->query('tracking_type');
+        $condition = $request->query('condition');
+
+        $assets = Asset::query()
+            ->with(['activeCustody', 'currentLocation'])
+            ->when($search, function ($query) use ($search) {
+                $term = "%{$search}%";
+                $query->where(function ($inner) use ($term) {
+                    PortableSearch::where($inner, 'name', $term);
+                    PortableSearch::orWhere($inner, 'inventory_code', $term);
+                    PortableSearch::orWhere($inner, 'serial_number', $term);
+                });
+            })
+            ->when($trackingType, fn ($query) => $query->where('tracking_type', $trackingType))
+            ->when($condition, fn ($query) => $query->where('condition', $condition))
+            ->orderBy('name')
+            ->paginate((int) $request->query('per_page', 20))
+            ->withQueryString();
+
+        return Inertia::render('Assets/Index', [
+            'assets' => AssetResource::collection($assets->items()),
+            'meta' => [
+                'page' => $assets->currentPage(),
+                'perPage' => $assets->perPage(),
+                'total' => $assets->total(),
+            ],
+            'filters' => ['search' => $search, 'tracking_type' => $trackingType, 'condition' => $condition],
+            'canCreate' => $request->user()?->can('create', Asset::class) ?? false,
+        ]);
+    }
+
+    public function create(): Response
+    {
+        $this->authorize('create', Asset::class);
+
+        return Inertia::render('Assets/Create', [
+            'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
+        ]);
+    }
+
+    public function store(StoreAssetRequest $request, RegisterAssetAction $action): RedirectResponse
+    {
+        $this->authorize('create', Asset::class);
+
+        try {
+            $asset = $action->execute($request->assetData(), $request->user());
+        } catch (AssetDomainException $exception) {
+            return back()->withErrors(['inventory_code' => $exception->getMessage()])->withInput();
+        }
+
+        return Redirect::route('assets.show', $asset)->with('success', 'აქტივი დარეგისტრირდა.');
+    }
+
+    public function show(Request $request, Asset $asset): Response
+    {
+        $this->authorize('view', $asset);
+
+        $asset->load(['activeCustody', 'currentLocation']);
+
+        $custodyHistory = CustodyTransaction::query()
+            ->whereHas('lines', fn ($query) => $query->where('asset_id', $asset->id))
+            ->with(['lines' => fn ($query) => $query->where('asset_id', $asset->id), 'receivingEmployee'])
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        $activeTransaction = $asset->activeCustody?->current_custody_transaction_id !== null
+            ? CustodyTransaction::query()->with(['lines.asset', 'receivingEmployee'])->find($asset->activeCustody->current_custody_transaction_id)
+            : null;
+
+        $incidents = AssetIncident::query()
+            ->where('asset_id', $asset->id)
+            ->with(['reportedBy', 'reviewedBy'])
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        return Inertia::render('Assets/Show', [
+            'asset' => (new AssetResource($asset))->resolve(),
+            'activeTransaction' => $activeTransaction === null ? null : (new CustodyTransactionResource($activeTransaction))->resolve(),
+            'custodyHistory' => CustodyTransactionResource::collection($custodyHistory)->resolve(),
+            'incidents' => AssetIncidentResource::collection($incidents)->resolve(),
+            'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
+            'can' => [
+                'manageCustody' => $request->user()?->can('assets.custody.manage') ?? false,
+                'reportIncident' => $request->user()?->can('report', AssetIncident::class) ?? false,
+                'decideIncident' => $request->user()?->can('assets.incidents.decide') ?? false,
+            ],
+        ]);
+    }
+}
