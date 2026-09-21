@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "notifications" (spec section 17 P1 list). Named
@@ -20,6 +21,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * delivery. `dedup_key` is required (never null); a notification with no
  * natural dedup key uses its own generated UUID as the key (routine
  * decision recorded on the table's own migration).
+ */
+/**
+ * @property array{title?: string, message?: string} $payload
+ * @property Carbon|null $read_at
  */
 class Notification extends Model
 {

@@ -14,6 +14,9 @@ use App\Domain\Attendance\Support\ProjectAttributionResolver;
 use App\Domain\Devices\Models\CredentialAssignment;
 use App\Domain\Devices\Models\ExternalIdentifierMapping;
 use App\Domain\Employees\Models\Employee;
+use App\Domain\Notifications\Support\NotificationCreator;
+use App\Domain\Notifications\Support\NotificationType;
+use App\Domain\Notifications\Support\UsersWithPermission;
 use App\Domain\Timesheets\Actions\HandleLateArrivingEventAction;
 use App\Domain\Timesheets\Support\TimesheetLockGuard;
 use App\Domain\Timesheets\Support\WorkDateResolver;
@@ -465,12 +468,45 @@ class ReconstructAttendanceSessionsAction
             return;
         }
 
-        AttendanceAnomaly::create([
+        $anomaly = AttendanceAnomaly::create([
             'employee_id' => $employeeId,
             'attendance_session_id' => $session?->id,
             'anomaly_type' => $type,
             'detected_at' => now(),
             'details' => $details,
         ]);
+
+        $this->notifyAnomaly($anomaly);
+    }
+
+    /**
+     * NOTIFY-01: `timesheet_exception` — a fresh (not deduplicated)
+     * attendance anomaly feeds directly into whether a Timesheet line for
+     * this employee's period ends up flagged, so this is the closest real
+     * hook to the ticket's named type. Broadcasts to every user in the
+     * organization who currently holds `attendance.anomalies.view` (finance/
+     * hr/owner, per database/seeders/modules/AttendancePermissionsSeeder.php)
+     * rather than a single "manager" — this codebase has no reliable
+     * employee-to-manager User link today (Employee::supervisor() points at
+     * another Employee, which may itself have no linked User account).
+     */
+    private function notifyAnomaly(AttendanceAnomaly $anomaly): void
+    {
+        $employee = Employee::query()->find($anomaly->employee_id);
+
+        if ($employee === null) {
+            return;
+        }
+
+        foreach (UsersWithPermission::inOrganization($employee->organization_id, 'attendance.anomalies.view') as $recipient) {
+            NotificationCreator::create(
+                recipient: $recipient,
+                type: NotificationType::TIMESHEET_EXCEPTION,
+                title: 'დასწრების გამონაკლისი',
+                message: "აღმოჩენილია გამონაკლისი ({$anomaly->anomaly_type}) თანამშრომლისთვის: {$employee->first_name} {$employee->last_name}",
+                dedupKey: "timesheet_exception:{$anomaly->id}:{$recipient->id}",
+                deepLink: '/attendance/anomalies',
+            );
+        }
     }
 }

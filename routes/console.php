@@ -22,3 +22,12 @@ Artisan::command('inspire', function () {
  * avoiding outright.
  */
 Schedule::command('outbox:relay')->everyMinute()->withoutOverlapping();
+
+/**
+ * NOTIFY-01: the scheduled half of the `overdue`/`tool_return_due`
+ * notification types — see App\Console\Commands\NotifyDueItems's own
+ * docblock. Once daily is deliberate: both checks are per-calendar-day
+ * deduplicated already, so running more often would do nothing but repeat
+ * the same "nothing new today" scan.
+ */
+Schedule::command('notifications:notify-due-items')->dailyAt('08:00')->withoutOverlapping();

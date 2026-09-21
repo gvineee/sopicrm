@@ -2,7 +2,11 @@
 
 namespace App\Domain\Tasks\Actions;
 
+use App\Domain\Notifications\Support\NotificationCreator;
+use App\Domain\Notifications\Support\NotificationType;
+use App\Domain\Notifications\Support\TaskNotificationRecipients;
 use App\Domain\Tasks\Models\Comment;
+use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskSubmission;
 use App\Domain\Tasks\Services\TaskStatusEventRecorder;
 use App\Models\User;
@@ -46,7 +50,28 @@ class ReturnTaskSubmission
                 'mentions' => [],
             ]);
 
+            $this->notifyPerformers($task);
+
             return $submission->fresh();
         });
+    }
+
+    /**
+     * NOTIFY-01: dedup key includes the submission id (not just the task
+     * id) — a task can legitimately be returned more than once across its
+     * lifetime, and each real return is its own notification.
+     */
+    private function notifyPerformers(Task $task): void
+    {
+        foreach (TaskNotificationRecipients::forTask($task) as $recipient) {
+            NotificationCreator::create(
+                recipient: $recipient,
+                type: NotificationType::TASK_RETURNED,
+                title: 'დავალება დაბრუნდა',
+                message: "დავალება \"{$task->title}\" დაბრუნდა შესასწორებლად",
+                dedupKey: "task_returned:{$task->id}:{$task->updated_at?->timestamp}",
+                deepLink: "/projects/{$task->project_id}/tasks/{$task->id}",
+            );
+        }
     }
 }
