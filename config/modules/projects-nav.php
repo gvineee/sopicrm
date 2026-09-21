@@ -16,6 +16,12 @@ return [
                 'route' => 'projects.index',
                 'permission' => ['projects.view', 'projects.viewAny'],
             ],
+            [
+                'label' => 'დავალებების კალენდარი',
+                'icon' => 'calendar-check',
+                'route' => 'tasks.calendar',
+                'permission' => null,
+            ],
         ],
     ],
 ];

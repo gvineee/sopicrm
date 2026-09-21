@@ -106,4 +106,58 @@ class DashboardController extends Controller
             'tasks' => $tasks,
         ]);
     }
+
+    /**
+     * PROJECT-01: a real calendar view of tasks by due date — reuses the
+     * EXACT same visibility scoping as index() above (project membership +
+     * TaskPolicy::scopeVisibleToPerformer() for anyone without project-wide
+     * tasks.tasks.view). No separate, looser query for this screen — a
+     * plain team member must never see a teammate's task here either.
+     */
+    public function calendar(Request $request, TaskPolicy $taskPolicy): Response
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $month = $request->string('month')->trim()->value();
+        $anchor = $month !== '' && preg_match('/^\d{4}-\d{2}$/', $month)
+            ? Carbon::createFromFormat('Y-m-d', $month.'-01')
+            : Carbon::now()->startOfMonth();
+
+        $rangeStart = $anchor->copy()->startOfMonth();
+        $rangeEnd = $anchor->copy()->endOfMonth();
+
+        $projectsQuery = Project::query();
+        if (! $user->can('viewAny', Project::class)) {
+            $projectsQuery->whereHas('memberships', function ($q) use ($user) {
+                $q->where('user_id', $user->id)->whereNull('removed_at');
+            });
+        }
+        $visibleProjectIds = $projectsQuery->pluck('id');
+
+        $taskBase = Task::query()->whereIn('project_id', $visibleProjectIds);
+        if (! $user->can('tasks.tasks.view')) {
+            $taskPolicy->scopeVisibleToPerformer($taskBase, $user);
+        }
+
+        $tasks = $taskBase
+            ->whereNotNull('due_at')
+            ->whereBetween('due_at', [$rangeStart, $rangeEnd])
+            ->with('project')
+            ->orderBy('due_at')
+            ->get()
+            ->map(fn (Task $task) => [
+                'id' => $task->id,
+                'project_id' => $task->project_id,
+                'title' => $task->title,
+                'project_name' => $task->project?->name,
+                'status' => $task->status,
+                'due_at' => $task->due_at?->toDateString(),
+            ]);
+
+        return Inertia::render('Projects/Calendar', [
+            'month' => $anchor->toDateString(),
+            'tasks' => $tasks,
+        ]);
+    }
 }

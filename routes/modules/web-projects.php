@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Contractors\TaskContractorAssignmentController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Projects\ProjectController;
 use App\Http\Controllers\Projects\ProjectDocumentController;
 use App\Http\Controllers\Projects\ProjectLocationController;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Route;
  * section 10: a task always belongs to exactly one project.
  */
 Route::middleware(['auth', 'verified'])->group(function (): void {
+    Route::get('tasks-calendar', [DashboardController::class, 'calendar'])->name('tasks.calendar');
+
     Route::resource('projects', ProjectController::class);
     Route::post('projects/{project}/status', [ProjectController::class, 'changeStatus'])->name('projects.status');
 
