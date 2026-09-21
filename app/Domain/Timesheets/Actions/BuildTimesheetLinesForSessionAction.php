@@ -6,9 +6,11 @@ use App\Domain\Attendance\Models\AttendanceSession;
 use App\Domain\Attendance\Models\Timesheet;
 use App\Domain\Attendance\Models\TimesheetLine;
 use App\Domain\Timesheets\Exceptions\InvalidAdjustmentInputException;
+use App\Domain\Timesheets\Exceptions\InvalidTimesheetStateException;
 use App\Domain\Timesheets\Exceptions\NoApplicableRateException;
 use App\Domain\Timesheets\Exceptions\PayableMinutesExceedApprovedException;
 use App\Domain\Timesheets\Support\RateResolver;
+use App\Domain\Timesheets\Support\TimesheetLockGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -40,13 +42,24 @@ use Illuminate\Support\Facades\DB;
  */
 class BuildTimesheetLinesForSessionAction
 {
-    public function __construct(private readonly RateResolver $rateResolver) {}
+    public function __construct(
+        private readonly RateResolver $rateResolver,
+        private readonly TimesheetLockGuard $lockGuard,
+    ) {}
 
     /**
      * @return list<TimesheetLine>
      */
     public function handle(Timesheet $timesheet, AttendanceSession $session): array
     {
+        if ($timesheet->status === 'locked') {
+            throw new InvalidTimesheetStateException('add lines to', $timesheet->status, 'draft/submitted/approved');
+        }
+
+        if ($this->lockGuard->isWorkDateLocked($timesheet->employee_id, CarbonImmutable::parse((string) $session->work_date))) {
+            throw new InvalidTimesheetStateException('add lines to', 'locked', 'draft/submitted/approved');
+        }
+
         if ($session->status !== 'closed' || $session->payable_minutes === null) {
             throw InvalidAdjustmentInputException::make(
                 'Only a closed session with resolved payable minutes can be turned into timesheet lines.',
