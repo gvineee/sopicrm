@@ -155,8 +155,9 @@ services:
       redis:
         condition: service_healthy
 
-  # PLACEHOLDER — see services/device-connector/README.md. No real Suprema
-  # G-SDK integration exists yet; this only proves the container shape.
+  # See services/device-connector/README.md. Suprema mode is read-only and
+  # hardware-verified via BioStar2 REST (docs/decisions.md DEC-080); it does
+  # not yet support write operations (credential/user changes).
   device-connector:
     build:
       context: ../services/device-connector
@@ -164,8 +165,27 @@ services:
     environment:
       DEVICE_CONNECTOR_MODE: simulator
       DEVICE_CONNECTOR_PORT: 4000
-    ports:
-      - "4000:4000"
+      DEVICE_CONNECTOR_LARAVEL_URL: http://app:8000/api/v1/device-connector
+      DEVICE_CONNECTOR_TOKEN: ${DEVICE_CONNECTOR_TOKEN:-}
+      DEVICE_CONNECTOR_DEVICE_IDS: ${DEVICE_CONNECTOR_DEVICE_IDS:-}
+      DEVICE_CONNECTOR_POLL_INTERVAL_MS: 5000
+      # Suprema mode config (docs/decisions.md DEC-080) — unused while
+      # DEVICE_CONNECTOR_MODE stays "simulator" above; pass-through only so a
+      # developer can flip to suprema locally without editing this file.
+      # Real values belong in a local, untracked .env — never here.
+      BIOSTAR_BASE_URL: ${BIOSTAR_BASE_URL:-}
+      BIOSTAR_USERNAME: ${BIOSTAR_USERNAME:-}
+      BIOSTAR_PASSWORD: ${BIOSTAR_PASSWORD:-}
+      BIOSTAR_VERIFY_TLS: ${BIOSTAR_VERIFY_TLS:-true}
+    expose:
+      - "4000"
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
   oda_crm_postgres_data:

@@ -40,7 +40,7 @@ npm install
 #    but this is the step for a fresh clone)
 Copy-Item .env.example .env
 
-# 4. Start Postgres, Redis, Mailpit, MinIO, device-connector (placeholder)
+# 4. Start Postgres, Redis, Mailpit, MinIO, and the device connector
 docker compose -f infra/docker-compose.yml up -d
 
 # 5. App key (already generated in the committed .env for this scaffold; a
@@ -189,8 +189,31 @@ The manifest/service-worker require a real HTTPS-or-localhost origin and won't d
 
 ---
 
-## Device-connector operations (to be filled in by the Devices module agent)
+## Device-connector operations
 
-`services/device-connector` currently runs as a **placeholder** (see its own `README.md`): a trivial Node process with a `/health` endpoint, started by `docker compose -f infra/docker-compose.yml up device-connector`, port `4000`. No real Suprema G-SDK integration, Sanctum machine token, or Simulator/real-adapter switch exists yet — none of that may be claimed as working until the Devices module agent implements it.
+`services/device-connector` is an internal Node worker. Docker Compose does not publish its health port to the host; the browser never calls it. The working simulator is always labeled **„სატესტო რეჟიმი“**. `DEVICE_CONNECTOR_MODE=suprema` deliberately refuses to start until a physical-reader pilot and real Device Gateway configuration exist; no simulator run counts as real-hardware validation.
 
-Placeholder for the real operations doc once built: how to start/stop the service, how its Sanctum machine token is provisioned/rotated, how to switch it between Simulator and real-Suprema-adapter mode, and the documented real-hardware pilot test plan referenced in spec section 6/22 (P0 acceptance: employee → card assignment → reader confirmation → event received → revocation confirmed, including outage/replay behavior).
+Provision one organization-bound token with only the four connector abilities:
+
+```bash
+php artisan tokens:issue-machine ORGANIZATION_UUID device-connector-site-1 \
+  --ability=device-connector:heartbeat.write \
+  --ability=device-connector:commands.read \
+  --ability=device-connector:commands.write \
+  --ability=device-connector:events.write
+```
+
+Store the returned token outside Git as `DEVICE_CONNECTOR_TOKEN`. Set `DEVICE_CONNECTOR_DEVICE_IDS` to the comma-separated UUIDs assigned to that site/organization, then start with `docker compose -f infra/docker-compose.yml up -d device-connector`. Rotate by issuing a new token, updating the secret, restarting the service, verifying `/health` internally, and only then revoking the old personal-access-token row.
+
+Every connector request carries a fresh `X-Connector-Nonce` and `X-Connector-Timestamp`; Laravel persists nonce uniqueness per machine token and rejects timestamps outside the configured window. Write retries keep the same `Idempotency-Key` but use a new nonce. Monitor device heartbeat age, event ingestion lag, retry/dead-letter command counts, clock-drift/data-gap anomalies, and `lastError` from the internal `/health` response.
+
+### Required real-hardware pilot (still pending)
+
+1. Read-only BioStar inventory/export and card mapping; do not write to readers.
+2. Select one test reader and record model, firmware and live capabilities from Device Gateway.
+3. Establish a single system of record; never leave BioStar and this connector as independent writers.
+4. Create an employee, issue a test card, confirm the command on the reader, present the card, and verify the immutable event arrives once with the correct epoch/native ID.
+5. Disconnect WAN/Laravel while leaving the site LAN and reader online; confirm local door decisions continue and buffered events replay without duplicates after recovery.
+6. Revoke the card while the reader is offline; UI must remain pending, never completed. Reconnect and verify acknowledgement before treating access as revoked at that reader.
+7. Exercise native-event ID rollover/log overflow and verify epoch handling plus a visible `data_gap` anomaly.
+8. Execute the documented rollback to the prior single writer. Record timestamps, device/firmware versions and evidence before enabling any additional reader.

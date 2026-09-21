@@ -1,6 +1,8 @@
 /.phpunit.cache
 /bootstrap/ssr
 /node_modules
+/services/device-connector/node_modules
+/route_list.json
 /dump.rdb
 *.rdb
 /public/build

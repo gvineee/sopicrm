@@ -1,0 +1,450 @@
+# Codex ↔ Claude Code handoff
+
+This file is the shared coordination point for the two coding sessions working
+in the Sopi CRM workspace. Read it before editing and update the handoff after
+each bounded task. The repository is the source of truth; chat messages are not
+a substitute for checking the current worktree.
+
+## Ownership
+
+- **Codex:** domain architecture, migrations, Laravel actions/services/jobs,
+  policies, APIs, integration contracts, database/RLS, automated tests and
+  release gates.
+- **Claude Code:** Vue/Inertia UI, responsive UX, frontend components and
+  frontend tests, unless a task is explicitly reassigned here.
+- **Shared files:** `routes/modules/*`, module navigation config,
+  `resources/js/lib/navIcons.ts`, and documentation. Touch these only after
+  checking `git diff` and recording the intended change below.
+
+## No-interference protocol
+
+1. Run `git status --short` and inspect the relevant diff before editing.
+2. One agent owns a file at a time. Do not rewrite, reset, or delete another
+   agent's uncommitted work.
+3. Keep changes additive and preserve existing public contracts. If a method or
+   prop must change, record the old and new shape in this file first.
+4. Run the narrowest relevant tests, then the full gates before handing off:
+   PHPStan, Pint, `php artisan test`, `npm run types:check`, and `npm run build`.
+5. Do not commit, push, add deploy keys, or change external permissions from an
+   agent session without an explicit user request.
+
+## Current handoff
+
+### 2026-09-21 — Claude Code, overnight execution: FILES-01 done (Task scope)
+
+- **Scope:** Wave 3, ticket FILES-01, completed for Task photos/attachments — the ticket's concretely-described core gap. Contractor act evidence has the same underlying issue but no UI to view it exists yet — deferred with a recorded next step, not silently half-fixed. Full detail in `docs/claude-overnight-progress.md`.
+- **Real gap found:** `TaskDetailResource` exposed attachment metadata with no URL at all, and no route existed to stream a task's file — `Tasks/Show.vue` rendered attachments as unclickable filename text. Worse: `SubmitTaskForAcceptance` re-owns evidence attachments from the Task to the `TaskSubmission` on submit, so a submitted task's photos disappeared from the page entirely (not just unopenable) — a reviewer had no way to see evidence before accepting/returning.
+- **Fix:** new `TaskSubmission::photoAttachments()` relation (live resolution, not the historical `photo_attachment_ids` array); new protected route `GET projects/{project}/tasks/{task}/attachments/{attachment}` with an ownership check requiring the attachment belong to that task directly or one of its own submissions (never merely exist somewhere); served inline (not force-download) so images embed and PDFs open in-browser; `TaskDetailResource` now carries a real `url` on both `attachments[]` and each submission's `photos[]`; `Tasks/Show.vue` renders real clickable/thumbnail previews. Separately verified (already correct, no fix needed): a failed submit already left the task `in_progress` with attachments intact and retryable.
+- **Files changed:** `app/Domain/Tasks/Models/TaskSubmission.php`, `app/Http/Controllers/Tasks/TaskController.php`, `app/Http/Resources/Tasks/TaskDetailResource.php`, `routes/modules/web-projects.php`, `resources/js/pages/Tasks/Show.vue`, new `tests/Feature/Projects/TaskAttachmentPreviewTest.php` (4 tests).
+- **Contract/schema changes:** none.
+- **Tests/gates:** `php artisan test --compact` → 184 passed / 2 skipped (953 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check`/`npm run build` → passed.
+- **Next:** ADMIN-02 (large, product-decision-heavy) or remaining Wave 3/4/5 tickets per the runbook's ordered queue.
+
+### 2026-09-21 — Claude Code, overnight execution: WORKER-01 done (Wave 3 started)
+
+- **Scope:** Wave 3, ticket WORKER-01 (real "ჩემი დღე" / My Day). Full detail in `docs/claude-overnight-progress.md`.
+- **Real gap:** `resources/js/pages/MyDay.vue` still rendered a static `demoTasks` placeholder array — every employee saw identical fake tasks regardless of who was logged in; the `my-day` route was a bare `Route::inertia()` with no backend.
+- **Fix:** new `App\Http\Controllers\MyDayController` reuses the existing `App\Policies\TaskPolicy::scopeVisibleToPerformer()` scope (same one FIX-02/A3 already proved correct) to build 4 real buckets — today, overdue, in-review, returned (identified via the task's own latest `TaskSubmission.status`, since a task itself has no "returned" status — it reverts to `in_progress`). `MyDay.vue` fully rewritten: every action (start/comment/photo/submit/unblock/report-blocker) posts straight to the pre-existing `TaskController` routes, no new mobile business logic. Fixed a real stale-reference bug caught during testing: the bottom sheet must re-derive its task from current (possibly just-reloaded) props by id, not cache a snapshot object, or a just-uploaded photo's attachment id never reaches the subsequent submit call.
+- **Files changed:** new `app/Http/Controllers/MyDayController.php`; `routes/modules/web-shared.php`; `resources/js/pages/MyDay.vue` (full rewrite); new `tests/Feature/Shared/MyDayTest.php` (4 tests).
+- **Contract/schema changes:** none.
+- **Tests/gates:** `php artisan test --compact` → 180 passed / 2 skipped (923 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check`/`npm run build` → passed.
+- **Next:** FILES-01 (protected attachment preview/download, multi-photo upload polish) or ADMIN-02 (large — administration area/roles/feature-toggle system, genuinely product-decision-heavy).
+
+### 2026-09-21 — Claude Code, overnight execution: QUEUE-01 done (partial), Wave 2 closed out
+
+- **Scope:** Wave 2, ticket QUEUE-01 (outbox relay/scheduler tenant-context correctness). Full detail, including a real Postgres-RLS surprise worth reading, in `docs/claude-overnight-progress.md`. This closes out Wave 2 (BIO-01 ✅, BIO-02 ✅ card slice, BIO-03 ⏸ partial, BIO-04 ✅, QUEUE-01 ⏸ partial — every deferred half has a recorded next step, nothing silently dropped).
+- **Real bug found, verified against a REAL restricted Postgres role (not just SQLite):** `RelayOutboxEvents`/`ProcessOutboxEventJob` both used `OutboxEvent::withoutTenantScope()` (Eloquent-layer only) but `outbox_events` also carries a real RLS policy requiring `app.current_org_id` — which neither ever set before their first read. Under `oda_app` (non-superuser, FORCE RLS), this means the relay would see **zero rows from any tenant, always** — confirmed empirically with a standalone reproduction before fixing, not assumed.
+- **A second, non-obvious finding while fixing it:** a `FOR SELECT`-only RLS policy does NOT satisfy `SELECT ... FOR UPDATE`'s row-locking visibility (empirically confirmed, contradicted my first assumption) — needed a second, `FOR UPDATE`-classified policy with explicit `WITH CHECK (false)` so the escape hatch can make a row visible/lockable across tenants but can never itself authorize the actual write.
+- **Fix:** two new narrowly-scoped, additive RLS policies on `outbox_events` gated on a distinct `app.outbox_relay_active` GUC (never set by any web/user-input path, only the relay/job's own server-side code, always transaction-scoped) — NOT a BYPASSRLS/superuser grant, which the standing constraint forbids. `RelayOutboxEvents`/`ProcessOutboxEventJob` (including its `failed()` callback, which had the identical bug) now use a two-phase read-then-narrow-to-real-tenant pattern. `outbox:relay` is now actually scheduled in `routes/console.php` (it existed but nothing ever ran it).
+- **Explicitly deferred:** scheduling "incremental attendance processing" and "health checks" — needs a "system actor" design decision (how does an automated job attribute a locked-period `AttendanceAdjustment` or an audit entry, which currently require a real `User`?) that doesn't exist anywhere in this codebase yet. Recorded with a concrete next step rather than invented under time pressure. Separately confirmed already-true: the dashboard never triggers a synchronous reconstruction.
+- **Files changed:** new migration `2026_09_21_120000_add_system_relay_read_policy_to_outbox_events_table.php`; `app/Console/Commands/RelayOutboxEvents.php`; `app/Jobs/Shared/ProcessOutboxEventJob.php`; `routes/console.php`; new `tests/Feature/Shared/OutboxScheduleTest.php`; `tests/Feature/Auth/TenantIsolationRlsTest.php` (+1 real-Postgres-RLS test).
+- **Contract/schema changes:** additive migration (2 new RLS policies only), applied to the real dev DB, verified via `pg_policies`.
+- **Tests/gates:** `php artisan test --compact` → 176 passed / 2 skipped (871 assertions) — including a real-Postgres-RLS test that runs the actual relay/job code (not mocks) against the restricted `oda_app` role and proves the fix. `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean.
+- **Next:** Wave 3 (ADMIN-02, WORKER-01, FILES-01) per the runbook's ordered queue.
+
+### 2026-09-21 — Claude Code, overnight execution: BIO-03 (partial) + BIO-04 done
+
+- **Scope:** Wave 2, tickets BIO-03 (partial — admin import-health visibility) and BIO-04 (connection reliability). Full detail in `docs/claude-overnight-progress.md`. Deliberately NOT attempted: BIO-03's real event search/pagination confirmation and BIO-04's event-code taxonomy mapping — both require confirming real Suprema API behavior this session has no access to; guessing either risks silently mis-processing a real security event log. Recorded as concrete deferred next steps, not silently skipped.
+- **BIO-03 done:** new "მოვლენების იმპორტის მდგომარეობა" section on `Devices/Show.vue` — real checkpoint position, open (unresolved-only) `data_gap`/`out_of_order_events`/`clock_drift` anomaly counts, and `DeviceSyncCommand` status backlog, all built from already-durable data with zero new tables.
+- **BIO-04 done:** removed the process-wide `NODE_TLS_REJECT_UNAUTHORIZED=0` mutation in `SupremaDeviceGatewayAdapter` — installed `undici` (a real new dependency, resolved in `docs/decisions.md`'s Pending dependencies table) and now scope TLS trust per-adapter via a dedicated `Agent` passed as `dispatcher`; added `BIOSTAR_CA_CERT_PATH` (trust the BioStar server's own cert specifically) and `BIOSTAR_REQUEST_TIMEOUT_MS` (default 10s, via `AbortSignal.timeout`); added exponential backoff (capped at 5 min) to the connector's tick loop for repeated failures instead of hammering an unreachable server every poll interval; hardened `heartbeat()`'s online-status check against a string/number JSON type variation.
+- **Files changed:** `services/device-connector/{package.json,package-lock.json,src/adapters/suprema-device-gateway.js,src/index.js,README.md,tests/connector.test.js}`; `app/Http/Controllers/Devices/DeviceController.php`; `resources/js/pages/Devices/Show.vue`; `tests/Feature/Devices/DeviceWebAccessTest.php`; `docs/decisions.md`.
+- **Contract/schema changes:** none. New real npm dependency `undici` ^7.29.1.
+- **Tests/gates:** `php artisan test --compact` → 174 passed / 2 skipped (855 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check`/`npm run build` → passed. `cd services/device-connector && npm test` → 20/20.
+- **Next:** QUEUE-01 (outbox relay/scheduler, tenant-safe job processing), closing out Wave 2.
+
+### 2026-09-21 — Claude Code, overnight execution: BIO-02 done (card-mapping slice)
+
+- **Scope:** Wave 2, ticket BIO-02 (external identifier mapping/triage), completed for the `card` external-identifier type — the case that actually affects attendance correctness. `device`/`user` mapping types are schema-ready (the `external_type` enum already lists them, the collision-safe unique key already covers them) but have no ingestion/confirm action wired — deliberately deferred since no second real BioStar source exists in this deployment to design that flow against honestly. Full detail in `docs/claude-overnight-progress.md`.
+- **Real gap found:** `IngestRawAccessEventAction` already never auto-created an Employee for an unrecognized card and already preserved the raw event immutably with `credential_id = null` — but there was no admin-visible triage page at all (only discoverable via a manual DB query), and `ReconstructAttendanceSessionsAction::orderedEventsFor()` had no way to retroactively attribute those historical null-credential_id rows once a human later identified the card's real owner.
+- **Fix:** new `external_identifier_mappings` table (source-scoped, collision-safe — `source_instance_key` defaults to `'default'`, never nullable, so a future second BioStar source can't silently collide via Postgres's NULL-is-distinct uniqueness semantics); `IngestRawAccessEventAction` now registers a deduped `pending` triage row per still-unknown card; new admin page `Devices/ExternalMappings/Index.vue` to confirm (→ reuses `IssueCredentialAction` itself, so the same active-assignment/uniqueness guards apply) or ignore a row; `ConfirmExternalIdentifierMappingAction` immediately re-runs `ReconstructAttendanceSessionsAction` so confirming means attendance is correct right away; `orderedEventsFor()` now also resolves ownership for historical unmatched rows via a confirmed mapping, without ever rewriting the immutable `RawAccessEvent` row itself (verified: raw rows are byte-for-byte identical before/after confirmation in the new test).
+- **Files changed:** see `docs/claude-overnight-progress.md`'s BIO-02 entry for the full list — new migration, model, factory, 2 exceptions, 2 actions, 1 policy, 1 controller, 2 requests, 1 Vue page, provider/seeder/routes/nav wiring, and a `resources/js/lib/navIcons.ts` addition (`shield-question` — shared file, noted here per the no-interference protocol).
+- **Contract/schema changes:** additive migration `2026_09_21_110000_create_external_identifier_mappings_table.php`, applied to the real dev DB (RLS policy verified via `pg_policies`); new `devices.external_mappings.{view,manage}` permissions seeded to the real DB.
+- **Tests/gates:** `php artisan test --compact` → 173 passed / 2 skipped (839 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check` and `npm run build` → passed (a fresh Vue page needs a rebuild before an HTTP-level Inertia test can render it — hit and fixed this once).
+- **Next:** BIO-03/BIO-04 (event pagination/checkpoint + taxonomy normalization + TLS/timeout hardening), then QUEUE-01, closing out Wave 2.
+
+### 2026-09-21 — Claude Code, overnight execution: BIO-01 done (Wave 2 started)
+
+- **Scope:** Wave 2, ticket BIO-01 (enforce read-only BioStar integration through server and adapter boundaries). Full detail in `docs/claude-overnight-progress.md`.
+- **Real gap found:** the Node connector's `SupremaDeviceGatewayAdapter::applyCommand()` (`services/device-connector/src/adapters/suprema-device-gateway.js`) already implements a real, unconditional `add_user` write against a live BioStar2 server with no config gate — any queued `add_user` command would be sent to real hardware the moment `DEVICE_CONNECTOR_MODE=suprema` is set. The in-process PHP `SupremaGSdkAdapter` was already safe (always throws), but it isn't what actually talks to real BioStar — the Node connector is, and it had no equivalent guard.
+- **Fix — two independent boundaries (hiding UI buttons alone was explicitly called out as insufficient):** (1) server-side: new `devices.biostar_write_dispatch_enabled` config (env `BIOSTAR_WRITE_DISPATCH_ENABLED`, default `false`) — `ConnectorCommandController::index()` now returns an empty `commands` array to the connector for a `suprema`-mode device while the flag is off, leaving the actual `DeviceSyncCommand` rows untouched (`pending`/`retry`, fully visible on the device's own sync-command-queue page); (2) adapter-side defense in depth: the JS adapter independently checks the same env var and refuses every command with zero HTTP calls unless it's the literal string `true`. New `BioStarReadOnlyBanner.vue` shown on the Devices/Credentials pages explaining that BioStar owns cards/access at this stage.
+- **Files changed:** `config/modules/devices.php`, `app/Http/Controllers/Api/V1/Devices/ConnectorCommandController.php`, `services/device-connector/src/adapters/suprema-device-gateway.js`, `services/device-connector/README.md`, `app/Http/Controllers/Devices/{DeviceController,CredentialController}.php`, new `resources/js/components/Devices/BioStarReadOnlyBanner.vue`, `resources/js/pages/Devices/{Index,Show,Credentials/Index}.vue`, `tests/Feature/Devices/DeviceConnectorApiTest.php` (+3), `services/device-connector/tests/connector.test.js` (+2 new, 5 existing updated to explicitly opt into write dispatch rather than being weakened).
+- **Contract/schema changes:** none (no migration — command withholding happens at the API response layer, not the DB).
+- **Tests/gates:** `php artisan test --compact` → 166 passed / 2 skipped (799 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check` and `npm run build` → passed. `cd services/device-connector && npm test` → 15/15.
+- **Explicitly out of scope, not touched:** BIO-02/03/04 (separate tickets, own file lists); the simulator "tick" button's `suprema`-mode UX (already safe — would throw, not silently fake success — just not polished).
+- **Next:** BIO-02 (external identifier mapping/triage for unmatched BioStar cards/users, possibly multiple sources per organization).
+
+### 2026-09-21 — Claude Code, overnight execution: ATT-01 done, Wave 1 complete
+
+- **Scope:** Wave 1, ticket ATT-01 (attendance session reconstruction correctness — denied-event exclusion, historical card-reassignment attribution, overnight-shift/timezone review, anomaly-rerun dedup). This closes out Wave 1. Full detail in `docs/claude-overnight-progress.md`.
+- **Real bugs fixed in `ReconstructAttendanceSessionsAction`:** (1) denied/rejected badge reads (`access_denied`) were opening/closing sessions like real granted reads — fixed by excluding a new `DENIED_EVENT_CODES` const from the event query; (2) events were attributed to an employee based on "this credential was assigned to them at some point in the requested range," not "at this specific event's own timestamp" — a mid-day card reassignment could leak events between the old and new holder — fixed with `credentialBelongedToEmployeeAt()`, re-checking `CredentialAssignment::activeAt()` per event; (3) `flagAnomaly()` created a fresh duplicate row every time reconstruction reran over the same unresolved problem — fixed by checking for an existing unresolved anomaly of the same type first (matched by session id, or by `details->raw_access_event_id` for session-less orphan events).
+- **Not a bug (verified, now covered by a test):** `WorkDateResolver::startDateFor()` already correctly converts to site-local time before taking the calendar date, so overnight shifts crossing local midnight were already attributed to the correct start date — this had no regression coverage before, now does.
+- **Files changed:** `app/Domain/Attendance/Actions/ReconstructAttendanceSessionsAction.php`, `tests/Feature/Attendance/AttendanceSessionReconstructionTest.php` (+4 tests).
+- **Contract/schema changes:** none.
+- **Tests/gates:** `php artisan test --compact` → 161 passed / 2 skipped (791 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check` and `npm run build` → passed. `npm --prefix services/device-connector test` → 13/13.
+- **Wave 1 exit gate:** FIX-01, FIX-02, ADMIN-01, MONEY-01, ATT-01 all done and verified (tests + phpstan + pint + typecheck + build + connector tests, all green together at the numbers above). TENANT-01 remains deferred with a recorded next slice (add nullable `sites.company_id`, no backfill guessing, admin-visible "unmapped sites" list) — see its own entry below.
+- **Next:** starting Wave 2 — BIO-01 (enforce read-only BioStar integration through server/adapter boundaries), then BIO-02 (external identifier mapping/triage for unmatched cards), BIO-03/BIO-04 (event pagination/checkpoint + taxonomy normalization + TLS/timeout hardening), QUEUE-01 (tenant-safe outbox relay/scheduler).
+
+### 2026-09-21 — Claude Code, overnight execution: MONEY-01 done, TENANT-01 investigated and deferred
+
+- **Scope:** Wave 1, ticket MONEY-01 (audit findings D1/D2 — payment concurrency/idempotency/ownership/currency). TENANT-01 was investigated but deferred as an oversized ticket for a dedicated pass (see `docs/claude-overnight-progress.md` for the full writeup of both).
+- **MONEY-01 real bugs fixed:** neither `RecordPaymentAction` (Payroll) nor `RecordContractorPaymentAction` (Contractors) locked anything before reading the outstanding balance (a real concurrent-overpayment race); neither had idempotent-retry protection (a double-click/network-retry created a duplicate real payment); `RecordPaymentAction` selected an `Advance` by id with no check it belongs to the employee being paid; both Actions accepted a payment currency with no validation against what the balance is actually denominated in. Fixed with: employee/contract row locking inside the transaction, a client-generated `request_id` (new migration, unique per organization, wired through both forms/controllers — one has no Vue form yet, so only its backend was updated), a new `AdvanceOwnershipMismatchException`, and a strict GEL-only policy for Payroll / contract-currency-match for Contractors (per the ticket's own stated "or strictly limit currency" escape hatch).
+- **TENANT-01 finding (not yet fixed, deferred):** `sites`, `devices`, and `employees` have no `company_id` at all — only `organization_id`. Within one organization with two companies, every Site/Device/Employee is currently visible/assignable to both equally. Fixing this needs a 3-table additive schema decision (own column vs. inherit via Site), a backfill strategy for existing rows (none can be auto-inferred today), and policy/query updates across two modules not touched this pass. Recorded as a concrete next slice rather than rushed.
+- **Files changed:** see `docs/claude-overnight-progress.md`'s MONEY-01 entry for the full list (Payroll + Contractors payment Actions, 2 new exceptions, 1 new migration, 1 Vue form, tests).
+- **Contract/schema changes:** additive migration `2026_09_21_100000_add_request_id_to_payment_tables.php`, applied to the real dev DB.
+- **Tests/gates:** `php artisan test --compact` → 157 passed / 2 skipped (778 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean. `npm run types:check` and `npm run build` → passed. `npm --prefix services/device-connector test` → 13/13.
+- **Explicit limitation:** genuine multi-process concurrent-request testing was not built (no test harness here spins up literal parallel DB connections) — only sequential correctness is covered by automated tests; the lock statements themselves are code-verified present.
+- **Next:** ATT-01 (attendance correctness — exclude denied/system events, historical card-reassignment attribution, overnight-shift/timezone review), closing out Wave 1.
+
+### 2026-09-21 — Claude Code, overnight execution: ADMIN-01 done
+
+- **Scope:** Wave 1, ticket ADMIN-01 (audit finding A1 — email-string full-admin Gate bypass). Full detail in `docs/claude-overnight-progress.md`.
+- **Root cause:** `AppServiceProvider`'s `Gate::before` returned `true` for every ability whenever `$user->email === 'admin@protect.ge'` — not durable (an email change would drop or transfer access to whoever holds that string next), and unconditionally bypassed `Gate::define('access-financial-data', ...)`'s MFA/2FA requirement too.
+- **Fix:** new durable `users.is_platform_admin` column (migration `2026_09_21_090000`, one-time backfill for the existing `admin@protect.ge` row), excluded from `User::$fillable`. `Gate::before` now checks that column by user id, and explicitly excludes `access-financial-data` from its bypass so 2FA is still required even for a platform admin. New `App\Domain\Auth\Actions\{Grant,Revoke}PlatformAdminAction` (audited, revoke refuses to remove the last admin) and a bootstrap console command `admin:platform-admin`.
+- **Files changed:** `app/Providers/AppServiceProvider.php`, `app/Models/User.php`, new `app/Domain/Auth/Actions/{Grant,Revoke}PlatformAdminAction.php`, new `app/Console/Commands/GrantPlatformAdmin.php`, new migration, new test `tests/Feature/Auth/PlatformAdminTest.php`.
+- **Contract/schema changes:** additive migration (`users.is_platform_admin`, default false). Applied to the real dev DB via `php artisan migrate --force` (not `migrate:fresh`) and verified.
+- **Tests/gates:** `php artisan test --compact` → 151 passed / 2 skipped (765 assertions). `vendor/bin/phpstan` → 0 errors. `vendor/bin/pint --dirty` → clean.
+- **Real verification (not just unit tests):** ran the migration against the actual `oda_crm` dev database, confirmed `admin@protect.ge` retained `is_platform_admin=true`, then logged in as that account against the real running dev server and confirmed `/dashboard` and a permission-gated page (`/payroll/pay-periods`) both still return 200 post-fix.
+- **Next:** TENANT-01 (Company/Site/Project/Employee/Device/financial-record ownership chain verification), then MONEY-01, ATT-01 to close Wave 1.
+
+### 2026-09-21 — Claude Code, overnight execution: FIX-01 and FIX-02 done
+
+- **Scope:** Wave 1, tickets FIX-01 (PHPStan) and FIX-02 (project/task visibility), per `claude-overnight-goal.md`. Full detail in `docs/claude-overnight-progress.md`.
+- **FIX-01:** `Zone::devices()` had a real return-type bug (annotated `HasMany`, body called `hasManyThrough`); added missing `Door`/`Zone` factories and relation/factory generics; fixed `ProjectPolicy::delete()`'s always-true redundant condition (`hasRole('owner') && (can('projects.delete') || hasRole('owner'))` → `hasRole('owner') || can('projects.delete')`, behavior-preserving today since only `owner` holds that permission). New test: `tests/Feature/Devices/ZoneDoorDomainTest.php`.
+- **FIX-02:** Two real, confirmed-by-reading-the-code access leaks. (1) `ProjectPolicy::viewAny()` treated the per-project `projects.view` permission as equivalent to org-wide `projects.viewAny`, so every `project_manager` (who holds `projects.view`) saw every project in the org's index/search/dashboard KPIs regardless of membership — fixed by removing that fallback. (2) `DashboardController` filtered tasks by project membership only, so a plain `employee` (never granted `tasks.tasks.view`) saw every teammate's task title on the dashboard even though `TaskPolicy::view()` would 403 them from opening it directly — fixed with a new shared `TaskPolicy::scopeVisibleToPerformer()` query scope, applied whenever the user lacks `tasks.tasks.view`. Also fixed 4 controllers' search filters (`Project`/`Device`/`Credential`/`Employee`) using Postgres-only `ilike` directly — new `App\Domain\Shared\Services\PortableSearch` makes them portable to SQLite too, which is why none of them had ever been exercised by a test before now. New tests added to `tests/Feature/Projects/ProjectTaskWebAccessTest.php`.
+- **Files changed:** `app/Policies/{ProjectPolicy,TaskPolicy}.php`, `app/Http/Controllers/DashboardController.php`, `app/Http/Controllers/{Projects/ProjectController,Devices/DeviceController,Devices/CredentialController,Employees/EmployeeController}.php`, `app/Domain/Devices/Models/{Door,Zone}.php`, new `database/factories/{Door,Zone}Factory.php`, new `app/Domain/Shared/Services/PortableSearch.php`.
+- **Contract/schema changes:** none. No migrations.
+- **Tests/gates:** `php artisan test --compact` → 145 passed / 2 skipped (752 assertions; baseline was 142/2/686). `vendor/bin/phpstan analyse` → 0 errors (was 9). `vendor/bin/pint --dirty` → clean. `npm run types:check` → clean. Not yet re-run this pass: `npm run build`, connector tests, `git diff --check` (deferred to the Wave 1 exit gate).
+- **Browser verification:** pending — no browser surface available this session, consistent with the audit's own stated limitation. All verification above is SQLite-based automated tests; no schema/RLS changed in this pass, so Postgres-specific re-verification isn't required for FIX-01/02 specifically but remains outstanding for the wave overall.
+- **Next:** ADMIN-01 (replace the `admin@protect.ge` email-string `Gate::before` bypass with an explicit, auditable platform-admin grant), then TENANT-01, MONEY-01, ATT-01 to close out Wave 1.
+
+### 2026-09-21 — User-authorized overnight implementation assignment
+
+- Read [overnight goal and execution runbook](claude-overnight-goal.md), then maintain [persistent progress checkpoint](claude-overnight-progress.md).
+- Claude may implement the linked backend and frontend tickets in small verified slices, continuing to the next eligible task without routine confirmation. Preserve existing work and check active file ownership.
+- The runbook contains the ordered backlog, acceptance gates, tenant/database safety, read-only BioStar direction, mandatory single/bulk timesheet emailing, blocker handling and context-resume procedure.
+- This entry assigns work; it does not claim the fixes have been implemented. Provider limits and unavailable external services cannot be overridden by the instruction.
+
+### 2026-09-21 — Codex audit and implementation instructions for Claude Code
+
+- **User-requested handoff:** read [platform audit](platform-audit-2026-09-21.md) and [implementation tickets](claude-platform-completion-2026-09-21.md) before continuing. They distinguish existing functionality, code-confirmed defects, and proposed additions, with file scopes and acceptance scenarios.
+- **Architecture direction:** retain BioStar as device/card/access-policy manager; CRM imports events and owns attendance, timesheets, payroll and reports. Read-only enforcement is a requested next implementation step, not a change already made by this audit.
+- **New explicit requirement:** email a single timesheet or a selected batch. The tickets cover recipient selection, PDF snapshots, per-recipient privacy, queues, send history, retry and realistic delivery status.
+- **Verified in this audit:** Laravel tests 142 passed / 2 skipped (686 assertions); connector mock tests 13 passed; Vue typecheck, Pint and production build passed. PHPStan fails with 9 findings in Door, Zone and ProjectPolicy.
+- **Priority defects:** inconsistent project/task visibility; email-based full-admin Gate; demo My Day; incomplete BioStar event pagination/employee mapping; attendance event-result and historical credential-assignment filtering; incomplete outbox processing; financial ownership/currency/concurrency checks; missing task photo viewing and Daily Journal pages.
+- **Ownership for this handoff:** the user requests Claude Code to implement the scoped backend and frontend tickets in the linked instructions. Check current diffs and any actively owned files before edits. Codex's audit introduced documentation only, alongside generated build output and verification against disposable test storage; no business-code fixes were applied.
+- **Verification limit:** the initial browser surface inventory returned no browsers/apps. Do not interpret this audit as a completed live browser or physical-reader acceptance run.
+
+### Codex in progress
+
+- Company tenancy foundation and Company CRUD UI are implemented and verified.
+- Company tenancy foundation is complete. Device registry enrichment is now
+  complete: additive production fields (name/vendor/identifier/IP/port/MAC,
+  hardware/firmware, connection mode, timezone, metadata, enabled, last seen,
+  last sync), searchable identity fields, compatibility-safe requests, and
+  heartbeat/event/sync timestamp projections are wired.
+- Next backend scope: Door / Zone and vendor-neutral
+  `AccessControlProvider` abstraction, followed by queue-backed sync state.
+- Project Manager dashboard is still placeholder-only and is the next product
+  UX/backend integration target.
+
+### Claude Code available scope
+
+- Projects/Tasks UI and the Project Manager dashboard are now built (see the
+  2026-09-17 entry below). Remaining Projects/Tasks UI not yet built: Kanban
+  drag-to-transition (deliberately not wired to a real status mutation — see
+  entry), calendar view, "My Day", WBS/membership/document management UI
+  (backend Actions exist, no controller/UI yet), Gantt/dependency scheduling
+  (P2 per spec).
+- Still do not edit Devices, Companies, access-control migrations or
+  connector files unless Codex explicitly reassigns a file here.
+
+### Latest verified gates
+
+- Backend: 108 passed, 2 skipped (Devices group: 24 passed, 153 assertions).
+- PHPStan: 0 errors; Pint and TypeScript passed.
+- Production Vite build passed.
+
+### 2026-09-17 — Codex
+
+- **Scope:** Devices production registry enrichment; additive migration
+  `2026_09_17_180000_extend_devices_for_production_registry.php`, model/action/
+  request/resource updates, Create/Edit/Show UI fields, search by name/serial/
+  identifier, and last-seen/last-sync projections.
+- **Contract:** Existing device requests remain valid; new identifiers are
+  organization-scoped and nullable until connector discovery. Hard delete is
+  still intentionally unavailable because device history is immutable.
+- **Tests/gates:** Devices 24/24 passed (153 assertions), full suite 106/108
+  passed with 2 skips; focused PHPStan 0 errors; Vue typecheck and production
+  build passed. Whole-repo Pint still reports pre-existing Task resource
+  formatting issues; the changed Devices actions were formatted and pass.
+- **Next agent:** Claude Code may continue Projects/Tasks UX only. Codex owns
+  Door/Zone schema and provider abstraction; do not edit Devices contracts
+  without recording the change here first.
+
+### 2026-09-17 — Codex (Door/Zone foundation)
+
+- Added additive `zones` and `doors` schema with organization/site ownership,
+  optional zone/device relationships, lock/REX/sensor JSON configuration,
+  direction, enabled state, indexes, foreign keys and PostgreSQL RLS.
+- Added `Zone` and `Door` Eloquent models. Device remains a separate entity;
+  doors reference devices rather than being conflated with them.
+- Devices regression suite remains green after the migration (24/24).
+
+### 2026-09-17 — Codex (provider boundary)
+
+- Added vendor-neutral `AccessControlProviderInterface`, retaining
+  `DeviceAdapterInterface` as a backwards-compatible parent contract.
+- Simulator and Suprema implementations now satisfy both contracts; the
+  service provider aliases the new boundary to the configured adapter.
+- Added deterministic `FakeAccessControlProvider` for hardware-free tests and
+  local development. No Suprema/G-SDK dependency was introduced.
+- Focused PHPStan and Devices tests pass (24/24).
+
+### 2026-09-17 — Codex (Claude continuation recovery)
+
+- Claude Code had stopped mid-edit after adding Project Show props. The
+  controller was inspected and is internally consistent; Project Show now has
+  working members, WBS/location and document sections with their existing
+  backend routes/actions.
+- TypeScript check and production build pass. Codex did not alter Tasks or
+  Devices ownership.
+
+### 2026-09-17 15:40 — Claude Code
+
+- **Scope:** Projects/Tasks web UI (Index/Create/Show/Edit for both) + a
+  real Project Manager dashboard, per the "Claude Code available scope"
+  section above. Read `ProjectController`, `ProjectPolicy`, `TaskPolicy`,
+  every `App\Domain\Tasks\Actions\*` class, and all related models/factories
+  before writing anything, per protocol.
+- **Files changed (new):**
+  `app/Http/Controllers/Tasks/TaskController.php`,
+  `app/Http/Controllers/DashboardController.php`,
+  `app/Http/Requests/Tasks/*` (10 files),
+  `app/Http/Resources/Tasks/{TaskResource,TaskDetailResource}.php`,
+  `app/Providers/Projects/ProjectsModuleServiceProvider.php`,
+  `app/Providers/Tasks/TasksModuleServiceProvider.php`,
+  `database/seeders/modules/TasksPermissionsSeeder.php`,
+  `config/modules/projects-nav.php`, `routes/modules/web-projects.php`,
+  `resources/js/pages/Projects/{Index,Create,Show,Edit}.vue`,
+  `resources/js/pages/Tasks/{Index,Create,Show,Edit}.vue`,
+  `tests/Feature/Projects/ProjectTaskWebAccessTest.php`,
+  `docs/handoff-nav-empty-issue.md` (an earlier live-bug diagnosis; safe to
+  delete once you've read it, or tell me and I will).
+- **Files changed (existing, small/additive edits — flagging per protocol
+  rule 3):**
+  - `app/Providers/AppServiceProvider.php`: added
+    `JsonResource::withoutWrapping()`. **Real bug, not a style choice**: any
+    single Resource passed directly as an Inertia prop (e.g.
+    `ProjectController@show`'s `'project' => new ProjectDetailResource(...)`)
+    was being wrapped in `{"data": ...}` by Laravel's default, so
+    `project.code` etc. were `undefined` in the browser. This is the
+    standard, official Laravel recommendation for SPA/Inertia apps. Verified
+    via the new Projects/Tasks test — it failed with exactly this symptom
+    before the fix, passed after. If anything elsewhere in the app relied on
+    the `data` envelope shape, it will need updating — I found none in the
+    current test suite (all 108 tests pass) but flagging since this is
+    app-wide.
+  - `app/Domain/Tasks/Actions/CreateTask.php`: added an explicit
+    `'status' => 'draft'` to the `Task::create([...])` call. Real bug: it
+    read `$task->status` immediately after `create()` without ever setting
+    it, and Eloquent does not re-fetch a DB-default column into the
+    in-memory model post-insert, so `TaskStatusEventRecorder::record()` got
+    `null` and threw a `TypeError` on every task creation. Caught by the new
+    test, not by any existing one (no prior Tasks controller/test existed).
+  - `app/Domain/Tasks/Actions/UploadTaskAttachment.php`: fixed
+    `config('modules.tasks.attachments')` → `config('tasks.attachments')`
+    (typo — `config/modules/tasks.php` merges under the `tasks` key per
+    `TasksModuleServiceProvider`, matching every other module's convention;
+    the old key never resolved).
+  - `app/Domain/Tasks/Models/{Task,TaskSubmission,TaskAcceptance,TaskStatusEvent}.php`:
+    added explicit `@property Carbon|null $due_at` /
+    `$submitted_at`/`$accepted_at`/`$occurred_at` docblocks. PHPStan/Larastan
+    doesn't reliably infer datetime casts declared via the Laravel 11+
+    method-style `casts()` (vs. the older `$casts` property) — this is the
+    same pattern already used in `CredentialAssignment.php`. No behavior
+    change, fixes 9 real PHPStan errors.
+  - `app/Http/Controllers/Projects/ProjectController.php`: added
+    `changeStatus()` action + `projects.status` route. The Policy
+    (`changeStatus`), Request (`TransitionProjectStatusRequest`), and Action
+    (`TransitionProjectStatusAction`) all already existed with no controller
+    method wired to them — `Show.vue` needed it for the status-change form.
+  - `app/Providers/{Projects,Tasks}ModuleServiceProvider` (new, see above):
+    **`ProjectPolicy` and `TaskPolicy` were not registered anywhere** — no
+    module provider existed for either. Laravel's policy auto-discovery does
+    not reliably resolve policies for models nested under
+    `app/Domain/<Module>/Models` in this codebase (same reason every other
+    module has an explicit `protected $policies` array). Without this,
+    every `$this->authorize()` call in `ProjectController` and the new
+    `TaskController` would have thrown. Verified via
+    `Gate::getPolicyFor(...)` resolving correctly post-fix.
+  - `database/seeders/AggregatingPermissionsSeeder.php` +
+    `TasksPermissionsSeeder.php` (new): **no Tasks permissions
+    (`tasks.tasks.*`) existed in the `permissions` table at all** — no
+    seeder had ever created them. Added following `ProjectsPermissionsSeeder`'s
+    exact pattern and registered it in the aggregator's `ORDER` list. Also
+    re-ran `php artisan db:seed --class=AggregatingPermissionsSeeder --force`
+    against the live dev DB (idempotent, `firstOrCreate`-based) so this
+    doesn't only take effect for fresh test databases.
+  - `tests/Feature/ExampleTest.php`: updated to assert the new real
+    root-redirect behavior (`/` → login/dashboard) instead of the old
+    Laravel-starter-kit "Welcome" 200 response — that page was removed in an
+    earlier session (see the conversation history / `routes/modules/web-shared.php`),
+    this was the one leftover failing test.
+- **Contract/schema changes:** none to the database schema. New routes only
+  (`projects.*`, `projects.tasks.*`, `dashboard` now backed by a real
+  controller instead of a bare `Route::inertia`).
+- **Deliberate product decision, not fully spec-complete:** the dashboard's
+  Kanban board renders real task data but its drag-and-drop `move` event is
+  intentionally a no-op (`@move="() => {}"`) — real task status transitions
+  each have their own preconditions (performer-only submit, reason-required
+  block/cancel, etc.) that don't map to a generic drag-to-column mutation.
+  Card actions link to the task's real page instead. KPI tiles only show
+  Projects/Tasks numbers I can actually compute — no placeholder
+  attendance/tool figures.
+- **Tests/gates:** `php artisan test` 108 passed / 2 skipped (0 failed);
+  `vendor/bin/phpstan analyse` (whole app) 0 errors; `vendor/bin/pint --dirty`
+  clean; `npm run types:check` clean; `npm run build` passed.
+- **Next agent:** Projects/Tasks now have a real, tested golden path
+  (create project → create task → assign → start → submit → accept →
+  completed, verified end-to-end in
+  `tests/Feature/Projects/ProjectTaskWebAccessTest.php`). Still open on the
+  Claude Code side: WBS/membership/document management UI, Kanban/calendar/
+  My Day views, task comments' `mentions` UI (backend accepts an array,
+  no picker built). `docs/handoff-nav-empty-issue.md` documents an earlier
+  live-session bug (empty sidebar nav) that turned out to be caused by
+  missing `devices.*` permissions never being seeded — same root-cause
+  category as the missing Tasks permissions found here; worth a project-wide
+  check for any other module whose `*PermissionsSeeder` was written but never
+  added to `AggregatingPermissionsSeeder::ORDER` or re-run against the dev DB.
+
+### 2026-09-17 evening — Claude Code
+
+- **Scope:** Two live-session bug reports (Companies creation, Employees
+  positions) plus the Projects/Tasks UI continuation Codex's prompt
+  requested. Read `docs/agent-handoff.md`, `docs/handoff-nav-empty-issue.md`,
+  the Projects/Tasks controllers/resources/pages, and the Companies/
+  Employees domain before touching anything, per protocol.
+- **Bug 1 — company creation (`app/Domain/Companies/Actions/CreateCompanyAction.php`):**
+  two real bugs, confirmed via `storage/logs/laravel.log`'s record of the
+  user's actual failed attempts against the real Postgres dev DB. (a) The
+  manual duplicate-code pre-check did `where('code', $data['code'])`, which
+  Laravel turns into `whereNull('code')` when code is blank — so adding any
+  *second* company with an empty code falsely failed once one company in the
+  org already had a blank code. (b) The same check is a non-atomic
+  check-then-insert; a race (fast retry/double-click) let the DB's real
+  `unique(organization_id, code)` constraint reject the insert as an
+  **uncaught 500**, which knocks Inertia out of the SPA entirely (exactly the
+  "window disappears" symptom reported) instead of showing a validation
+  error. Fixed both: skip the pre-check when code is null, and catch
+  `UniqueConstraintViolationException` around the transaction and convert it
+  to the existing friendly `ValidationException`. Regression tests added in
+  `tests/Feature/Companies/CompanyWebAccessTest.php`. Verified against the
+  real dev DB directly (not just sqlite tests) that companies are created
+  and immediately visible via the exact index query — 8 companies now exist
+  for the reporting org, all real.
+- **Bug 2 — employee "positions" (new feature, at the user's explicit
+  direction after a scoping question):** `employees.position` was free text
+  with no predefined list, so managers couldn't reliably filter "who is in
+  position X". Added a small `Position` module: migration
+  `2026_09_17_200000_create_positions_and_add_position_id_to_employees.php`
+  (additive `positions` table + RLS + nullable `employees.position_id` FK;
+  the legacy free-text `position` column is untouched for old records),
+  `App\Domain\Employees\Models\Position`, `PositionPolicy` (reuses
+  `employees.employees.*` permissions — no new permission pair), a small
+  `PositionController` (list + inline create/edit, no destroy — matches the
+  Companies/Devices "disable, don't delete a referenced record" precedent),
+  routes/nav under the Employees module. `Employee::jobPosition()` is
+  deliberately NOT named `position()` — that name collides with the existing
+  `position` database column and would be silently unreachable via magic
+  property access (Eloquent always resolves a same-named attribute over a
+  relation). Wired into `EmployeeController` (index filters by
+  `position_id`/`supervisor_employee_id` — the latter was also missing and
+  is part of the same "filter by manager" ask), `StoreEmployeeRequest`/
+  `UpdateEmployeeRequest`/`*EmployeeAction`, `EmployeeResource`, and
+  `EmployeeForm.vue` (free-text input replaced with a `<select>` fed by the
+  new list). Tests added in `tests/Feature/Employees/EmployeeAccessTest.php`.
+- **New feature — `/me/profile` ("ჩემი პროფილი"):** at the user's request for
+  an employee self-service view of hours/salary/attendance. Scoped down
+  after flagging that Attendance/Payroll (REQ-ATT/REQ-TSH/REQ-PAY) are all
+  still `not-started` in `docs/implementation-plan.md` — the user chose the
+  minimal option. `App\Http\Controllers\MyProfileController` derives the
+  Employee from `$request->user()->id` only (never a route parameter, so
+  there is no IDOR surface by construction) and is intentionally gated by
+  nothing beyond `auth` — seeing your own data doesn't need a permission
+  grant. It shows real profile fields and real raw device check-in/out
+  events (`RawAccessEvent`, already ingested by the Devices module) with an
+  honest "not available yet" empty state for worked-hours/salary rather than
+  fabricating numbers. New nav entry in `shared-nav.php` (permission `null`
+  — visible to everyone), tests in `tests/Feature/Shared/MyProfileTest.php`.
+  Updated `tests/Feature/Shared/NavigationServiceTest.php`'s now-two-item
+  "მიმოხილვა" group assertion accordingly.
+- **Projects/Tasks UI continuation (Codex's prompt scope):** Project
+  Index/Show now show and filter by `company` (controller + `ProjectResource`/
+  `ProjectDetailResource` gained a `company` relation/prop — was previously
+  loaded nowhere despite the column existing). Task Index gained a
+  `priority` filter (controller previously only supported `status`/
+  `accountable_owner_employee_id`) plus a clear-filters affordance on both
+  lists. `Projects/Show.vue` was restructured from one long mixed-language
+  (English labels like "Project members"/"Work breakdown" inside an
+  otherwise Georgian page) scroll into real tabs — Overview/Tasks/Members/
+  WBS/Documents/Activity — all in Georgian, with a real (not fabricated)
+  task-status-count summary (`taskStats` prop, new) and destructive-action
+  confirmations on member/location/document removal that had no UI before.
+  Activity tab is an honest empty state (no activity feed exists yet — not
+  fabricated). Did not build a Kanban duplicate inside Show — it links to
+  the existing full `/tasks` page instead, to avoid two divergent
+  implementations of the same status-transition rules.
+- **Contract/schema changes:** additive only — `positions` table,
+  `employees.position_id` (nullable FK), no destructive changes anywhere.
+  New routes: `positions.index/store/update`, `me.profile`. New Inertia
+  props: `Projects/Index`'s `companies`/`filters.company_id`, `Projects/Show`'s
+  `taskStats`, `Tasks/Index`'s `employees`/`filters.priority`,
+  `Employees/Index`'s `positions`/`supervisors`/two new filter keys,
+  `Employees/Create|Edit`'s `positions`.
+- **Tests/gates:** `php artisan test` 115 passed / 2 skipped (0 failed);
+  `vendor/bin/phpstan analyse` (whole app) 0 errors; `vendor/bin/pint --dirty`
+  clean; `npm run types:check` clean; `npm run build` passed. Migration run
+  against the real dev DB (`php artisan migrate`), not just the sqlite test
+  DB.
+- **Next agent:** Still open from the previous entry: Kanban drag-to-transition
+  (deliberate no-op), calendar view, comments' `mentions` picker UI. New:
+  Attendance/Payroll modules are the real blocker on `/me/profile` ever
+  showing real hours/days/salary — when that module agent runs, it should
+  fill in `MyProfileController`'s two empty-state sections with real
+  computed data rather than adding a second, competing "my hours" surface.
+  `docs/handoff-nav-empty-issue.md`'s bug is unrelated to anything found
+  here (that was a permission-cache/duplicate-account issue on a demo
+  account, confirmed not reproducible for the real reporting user, who has
+  correct `owner` permissions) — safe to delete once someone confirms the
+  live nav is populated after a hard refresh.
+
+## Handoff entry format
+
+```text
+### YYYY-MM-DD HH:MM — Agent
+- Scope:
+- Files changed:
+- Contract/schema changes:
+- Tests/gates:
+- Next agent:
+```

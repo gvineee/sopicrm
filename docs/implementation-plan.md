@@ -77,73 +77,75 @@ Cross-reference: `docs/architecture.md` (how), `docs/data-model.md` (schema), `d
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-DEV-01 | `services/device-connector` process skeleton with versioned, authenticated (Sanctum machine token) contract to Laravel; no public device ports; browser never talks to devices directly | P0 | not-started |
-| REQ-DEV-02 | `DeviceAdapterInterface` + Simulator adapter, permanently labeled "სატესტო რეჟიმი" in UI wherever its data appears | P0 | in-progress |
+| REQ-DEV-01 | `services/device-connector` process skeleton with versioned, authenticated (Sanctum machine token) contract to Laravel; no public device ports; browser never talks to devices directly | P0 | done |
+| REQ-DEV-02 | `DeviceAdapterInterface` + Simulator adapter, permanently labeled "სატესტო რეჟიმი" in UI wherever its data appears | P0 | done |
 | REQ-DEV-03 | Real Suprema adapter behind the same interface, targeting G-SDK Device/User/Event APIs; capability read from device, never hardcoded | P0/P1 | in-progress |
-| REQ-DEV-04 | Device CRUD + status model (online/offline/degraded/unknown) with independent sync_status; capability snapshot storage | P0/P1 | in-progress |
-| REQ-DEV-05 | Credential CRUD preserving raw bytes/length/leading zeros; documented decimal/hex/byte-order adapter conversion | P1 | in-progress |
-| REQ-DEV-06 | CredentialAssignment with DB-enforced single-active-assignment-per-credential; historical event attribution by assignment validity window, not current pointer | P1 | not-started |
-| REQ-DEV-07 | Unmatched/unknown card triage record; never auto-creates an Employee | P1 | not-started |
-| REQ-DEV-08 | DeviceSyncCommand queue: pending→processing→succeeded/failed/retry/dead-letter; idempotency key + monotonic command_version so stale retries can't overwrite newer commands | P0/P1 | not-started |
-| REQ-DEV-09 | UI: desired state vs. per-device acknowledged state shown separately; offline-device pending revocation never shown as completed | P1 | not-started |
-| REQ-DEV-10 | Reconciliation job comparing desired vs actual state; no bulk destructive reset during normal sync | P1 | not-started |
-| REQ-DEV-11 | RawAccessEvent immutable ingestion with dedup on (device_id, native_event_id, stream_epoch); payload hash as secondary check only | P0/P1 | not-started |
-| REQ-DEV-12 | DeviceCheckpoint-based resume after network outage; overlapping-batch-safe dedup; data-gap flagging on log overflow/lost range | P1 | not-started |
-| REQ-DEV-13 | Clock drift / inconsistent ordering detection feeding AttendanceAnomaly | P1 | not-started |
-| REQ-DEV-14 | Local-first access decision design note (WAN-independent door decisions) + documented limitation that offline revocation can't propagate instantly | P1 | not-started |
-| REQ-DEV-15 | BioStar migration plan doc: read-only inventory/export + card mapping first, single test-reader pilot second, single system-of-record + rollback plan, no dual independent writers | P1 (planning only) | not-started |
-| REQ-DEV-16 | P0 pilot acceptance scenario: employee → card assignment → reader confirmation → event received → revocation confirmed, including outage/replay test | P0 | not-started |
-| REQ-DEV-17 | Devices module Policies + Pest/integration tests (idempotency, dedup, epoch rollover, revocation-not-shown-as-complete-when-offline) | P0/P1 | in-progress |
+| REQ-DEV-04 | Device CRUD + status model (online/offline/degraded/unknown) with independent sync_status; capability snapshot storage | P0/P1 | done |
+| REQ-DEV-05 | Credential CRUD preserving raw bytes/length/leading zeros; documented decimal/hex/byte-order adapter conversion | P1 | done |
+| REQ-DEV-06 | CredentialAssignment with DB-enforced single-active-assignment-per-credential; historical event attribution by assignment validity window, not current pointer | P1 | done |
+| REQ-DEV-07 | Unmatched/unknown card triage record; never auto-creates an Employee | P1 | done |
+| REQ-DEV-08 | DeviceSyncCommand queue: pending→processing→succeeded/failed/retry/dead-letter; idempotency key + monotonic command_version so stale retries can't overwrite newer commands | P0/P1 | done |
+| REQ-DEV-09 | UI: desired state vs. per-device acknowledged state shown separately; offline-device pending revocation never shown as completed | P1 | done |
+| REQ-DEV-10 | Reconciliation job comparing desired vs actual state; no bulk destructive reset during normal sync | P1 | done |
+| REQ-DEV-11 | RawAccessEvent immutable ingestion with dedup on (device_id, native_event_id, stream_epoch); payload hash as secondary check only | P0/P1 | done |
+| REQ-DEV-12 | DeviceCheckpoint-based resume after network outage; overlapping-batch-safe dedup; data-gap flagging on log overflow/lost range | P1 | done |
+| REQ-DEV-13 | Clock drift / inconsistent ordering detection feeding AttendanceAnomaly | P1 | done |
+| REQ-DEV-14 | Local-first access decision design note (WAN-independent door decisions) + documented limitation that offline revocation can't propagate instantly | P1 | done |
+| REQ-DEV-15 | BioStar migration plan doc: read-only inventory/export + card mapping first, single test-reader pilot second, single system-of-record + rollback plan, no dual independent writers | P1 (planning only) | done |
+| REQ-DEV-16 | P0 pilot acceptance scenario: employee → card assignment → reader confirmation → event received → revocation confirmed, including outage/replay test | P0 | in-progress |
+| REQ-DEV-17 | Devices module Policies + Pest/integration tests (idempotency, dedup, epoch rollover, revocation-not-shown-as-complete-when-offline) | P0/P1 | done |
+
+REQ-DEV-16 has passed end-to-end against the simulator, including duplicate outage replay and offline revocation pending/acknowledgement. It remains `in-progress` until the same acceptance flow is recorded against the physical Suprema XPass 2 pilot. REQ-DEV-03 likewise remains `in-progress`: the adapter boundary fails closed by design until real Device Gateway configuration and capability reads can be validated on that reader.
 
 ## REQ-ATT — Attendance, Sessions & Anomalies (spec §7 raw/session/anomaly part)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-ATT-01 | ShiftTemplate CRUD (site, start/end, night-crossing, scheduled days, break policy, allowed lateness, rounding policy, approver) — all thresholds configurable, none hardcoded | P1 | not-started |
-| REQ-ATT-02 | ShiftAssignment CRUD | P1 | not-started |
-| REQ-ATT-03 | Deterministic, re-runnable AttendanceSession reconstruction service from RawAccessEvents; exact-minute precision, no auto-rounding of raw time | P1 | not-started |
-| REQ-ATT-04 | Break deduction logic: fixed or scheduled break, same break never deducted twice (idempotent per session+break-window) | P1 | not-started |
-| REQ-ATT-05 | Overlapping-session DB exclusion constraint + reader-direction determined by configured device role, not naive alternate-read heuristic | P1 | not-started |
-| REQ-ATT-06 | AttendanceAnomaly detection: duplicate IN, unknown OUT, missing OUT, excessive duration, impossible site crossing, late-arriving data, clock drift, out-of-order events, data gap | P1 | not-started |
-| REQ-ATT-07 | Missing-OUT never auto-pays a full day; session stays open pending resolution | P1 | not-started |
-| REQ-ATT-08 | Multi-site-per-day time attribution to correct project | P1 | not-started |
-| REQ-ATT-09 | Pest tests matching spec §23 attendance rows: 09:00–18:00 + 60min unpaid break → 480 min; missing OUT → anomaly, no auto full-day pay; duplicate event ×10 → one raw event/one result; reader epoch rollover → new event not lost | P1 | not-started |
+| REQ-ATT-01 | ShiftTemplate CRUD (site, start/end, night-crossing, scheduled days, break policy, allowed lateness, rounding policy, approver) — all thresholds configurable, none hardcoded | P1 | done |
+| REQ-ATT-02 | ShiftAssignment CRUD | P1 | done |
+| REQ-ATT-03 | Deterministic, re-runnable AttendanceSession reconstruction service from RawAccessEvents; exact-minute precision, no auto-rounding of raw time | P1 | done |
+| REQ-ATT-04 | Break deduction logic: fixed or scheduled break, same break never deducted twice (idempotent per session+break-window) | P1 | done |
+| REQ-ATT-05 | Overlapping-session DB exclusion constraint + reader-direction determined by configured device role, not naive alternate-read heuristic | P1 | done |
+| REQ-ATT-06 | AttendanceAnomaly detection: duplicate IN, unknown OUT, missing OUT, excessive duration, impossible site crossing, late-arriving data, clock drift, out-of-order events, data gap | P1 | done |
+| REQ-ATT-07 | Missing-OUT never auto-pays a full day; session stays open pending resolution | P1 | done |
+| REQ-ATT-08 | Multi-site-per-day time attribution to correct project | P1 | done |
+| REQ-ATT-09 | Pest tests matching spec §23 attendance rows: 09:00–18:00 + 60min unpaid break → 480 min; missing OUT → anomaly, no auto full-day pay; duplicate event ×10 → one raw event/one result; reader epoch rollover → new event not lost | P1 | done |
 
 ## REQ-TSH — Timesheets & Adjustments (spec §7 adjustment/approval/lock part)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-TSH-01 | Manual AttendanceAdjustment form (employee, date, site, corrected in/out or hours, reason, evidence, author, approver); original session never overwritten | P1 | not-started |
-| REQ-TSH-02 | Overlap + negative-duration blocking on adjustments | P1 | not-started |
-| REQ-TSH-03 | Night-shift attribution to shift start-date; rate-change-boundary splitting into multiple timesheet lines with rate snapshots | P1 | not-started |
-| REQ-TSH-04 | Timesheet state machine: draft → submitted → approved → locked; rejected → draft with reason | P1 | not-started |
-| REQ-TSH-05 | Approval snapshots source-session versions + calculation policy version used | P1 | not-started |
-| REQ-TSH-06 | Locked-period late event handling: creates adjustment request, never silently changes historical pay | P1 | not-started |
-| REQ-TSH-07 | Per-day multi-project allocation cannot exceed employee's approved payable minutes for that day | P1 | not-started |
-| REQ-TSH-08 | Task closure / task timer explicitly excluded as an independent payroll time source | P1 | not-started |
-| REQ-TSH-09 | Approval polymorphic table with target_version staleness check (stale draft can't be treated as approved) | P1 | not-started |
-| REQ-TSH-10 | Timesheets module Policies (self-approval forbidden by default; owner-only small-company exception with audit) | P1 | not-started |
-| REQ-TSH-11 | Pest tests matching spec §23 timesheet rows: mid-shift rate change → 2×10 + 2×15 = 50.00 GEL with two rate snapshots; locked-period late event → adjustment request, historical pay run unchanged | P1 | not-started |
+| REQ-TSH-01 | Manual AttendanceAdjustment form (employee, date, site, corrected in/out or hours, reason, evidence, author, approver); original session never overwritten | P1 | done |
+| REQ-TSH-02 | Overlap + negative-duration blocking on adjustments | P1 | done |
+| REQ-TSH-03 | Night-shift attribution to shift start-date; rate-change-boundary splitting into multiple timesheet lines with rate snapshots | P1 | done |
+| REQ-TSH-04 | Timesheet state machine: draft → submitted → approved → locked; rejected → draft with reason | P1 | done |
+| REQ-TSH-05 | Approval snapshots source-session versions + calculation policy version used | P1 | done |
+| REQ-TSH-06 | Locked-period late event handling: creates adjustment request, never silently changes historical pay | P1 | done |
+| REQ-TSH-07 | Per-day multi-project allocation cannot exceed employee's approved payable minutes for that day | P1 | done |
+| REQ-TSH-08 | Task closure / task timer explicitly excluded as an independent payroll time source | P1 | done |
+| REQ-TSH-09 | Approval polymorphic table with target_version staleness check (stale draft can't be treated as approved) | P1 | done |
+| REQ-TSH-10 | Timesheets module Policies (self-approval forbidden by default; owner-only small-company exception with audit) | P1 | done |
+| REQ-TSH-11 | Pest tests matching spec §23 timesheet rows: mid-shift rate change → 2×10 + 2×15 = 50.00 GEL with two rate snapshots; locked-period late event → adjustment request, historical pay run unchanged | P1 | done |
 
 ## REQ-PAY — Payroll & Payments (spec §8)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-PAY-01 | Hourly calculation: approved payable minutes / 60 × effective hourly rate, Decimal only | P1 | not-started |
-| REQ-PAY-02 | Daily calculation: approved day units × effective daily rate; full/half-day threshold, minimum attendance, incomplete-day behavior all config-driven, not hardcoded | P1 | not-started |
-| REQ-PAY-03 | Default max 1.0 day-unit per employee per work-date across sites; exception requires separate approval | P1 | not-started |
-| REQ-PAY-04 | PayRun line stores hours/days, rate snapshot, formula, policy version, project split, adjustments | P1 | not-started |
-| REQ-PAY-05 | Half-up rounding to 0.01 GEL at final line; deterministic remainder allocation across project splits (sum preserved exactly) | P1 | not-started |
-| REQ-PAY-06 | Configurable PayAdjustment categories (overtime, holiday, bonus, vacation, absence); statutory coefficients/taxes NOT activated without confirmed accountant-approved policy | P1 | not-started |
-| REQ-PAY-07 | PayRun state machine: draft → calculated → reviewed → approved → locked | P1 | not-started |
-| REQ-PAY-08 | Payment record (date, amount, currency, method, evidence, reference) separate from approval; partial payments allowed; `pending` never counted as `paid` | P1 | not-started |
-| REQ-PAY-09 | Outstanding balance formula: approved amount − allocated payments − allocated advances; advance deducted exactly once | P1 | not-started |
-| REQ-PAY-10 | Deduction for damaged tools/fines/debt requires separate permission, reason, and approved company rule — never automatic | P1 | not-started |
-| REQ-PAY-11 | Locked-period correction via reversal/adjustment row, never delete/edit | P1 | not-started |
+| REQ-PAY-01 | Hourly calculation: approved payable minutes / 60 × effective hourly rate, Decimal only | P1 | done |
+| REQ-PAY-02 | Daily calculation: approved day units × effective daily rate; full/half-day threshold, minimum attendance, incomplete-day behavior all config-driven, not hardcoded | P1 | done |
+| REQ-PAY-03 | Default max 1.0 day-unit per employee per work-date across sites; exception requires separate approval | P1 | done |
+| REQ-PAY-04 | PayRun line stores hours/days, rate snapshot, formula, policy version, project split, adjustments | P1 | done |
+| REQ-PAY-05 | Half-up rounding to 0.01 GEL at final line; deterministic remainder allocation across project splits (sum preserved exactly) | P1 | done |
+| REQ-PAY-06 | Configurable PayAdjustment categories (overtime, holiday, bonus, vacation, absence); statutory coefficients/taxes NOT activated without confirmed accountant-approved policy | P1 | done |
+| REQ-PAY-07 | PayRun state machine: draft → calculated → reviewed → approved → locked | P1 | done |
+| REQ-PAY-08 | Payment record (date, amount, currency, method, evidence, reference) separate from approval; partial payments allowed; `pending` never counted as `paid` | P1 | done |
+| REQ-PAY-09 | Outstanding balance formula: approved amount − allocated payments − allocated advances; advance deducted exactly once | P1 | done |
+| REQ-PAY-10 | Deduction for damaged tools/fines/debt requires separate permission, reason, and approved company rule — never automatic | P1 | done |
+| REQ-PAY-11 | Locked-period correction via reversal/adjustment row, never delete/edit | P1 | done |
 | REQ-PAY-12 | Payroll CSV export (period, employee, hours, days, accrual, advance, paid, balance) hardened against spreadsheet formula injection | P1 | not-started |
 | REQ-PAY-13 | CSV export UI copy makes clear it is not a real bank transfer | P1 | not-started |
-| REQ-PAY-14 | Payroll module Policies (Finance role; system admin has no automatic financial access; PM cannot pull payroll export without explicit permission) | P1 | not-started |
-| REQ-PAY-15 | Pest tests matching spec §23 payroll rows: 480 min × 15 GEL/hr = 120.00 GEL; 1 approved day × 100 GEL = 100.00 GEL; salary 1000, advance 200, payment 300 → balance 500, advance not double-deducted; PM without permission requesting payroll export/API → denied | P1 | not-started |
+| REQ-PAY-14 | Payroll module Policies (Finance role; system admin has no automatic financial access; PM cannot pull payroll export without explicit permission) | P1 | done |
+| REQ-PAY-15 | Pest tests matching spec §23 payroll rows: 480 min × 15 GEL/hr = 120.00 GEL; 1 approved day × 100 GEL = 100.00 GEL; salary 1000, advance 200, payment 300 → balance 500, advance not double-deducted; PM without permission requesting payroll export/API → denied | P1 | done (except the export-permission-denial row, which needs REQ-PAY-12 first) |
 
 ## REQ-AST — Tools, Assets & Custody (spec §9)
 
