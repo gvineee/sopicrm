@@ -44,7 +44,18 @@ class ReturnDailyReportAction
                 'approvable_id' => $report->id,
                 'target_version' => $before['version'],
                 'approver_user_id' => $actor->id,
-                'decision' => 'returned',
+                // `approvals.decision` (database/migrations/2026_09_16_090160_create_approvals_table.php)
+                // is a shared enum('approved','rejected') reused by every
+                // module (Payroll/Timesheets already write exactly these two
+                // values) — 'returned' is not a member and previously made
+                // every real return() call fail with a CHECK-constraint
+                // violation (caught by JOURNAL-01's first real test for this
+                // action). 'rejected' is this module's own return-to-draft
+                // outcome expressed in that shared vocabulary; the actual
+                // "returned for correction" semantics still live in
+                // DailyReport.status/the reason text and the
+                // 'daily_journal.report.returned' audit action below.
+                'decision' => 'rejected',
                 'reason' => $reason,
                 'decided_at' => now(),
             ]);

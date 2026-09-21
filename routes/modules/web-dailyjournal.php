@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Route;
  * alone (`auth`) is never the authorization boundary.
  */
 Route::middleware(['auth', 'verified'])
+    ->get('/daily-journal', [DailyReportController::class, 'projects'])
+    ->name('daily-journal.projects');
+
+Route::middleware(['auth', 'verified'])
     ->prefix('projects/{project}/daily-journal')
     ->name('daily-journal.')
     ->group(function (): void {

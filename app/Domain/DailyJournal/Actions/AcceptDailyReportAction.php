@@ -58,7 +58,14 @@ class AcceptDailyReportAction
                 'approvable_id' => $report->id,
                 'target_version' => $before['version'],
                 'approver_user_id' => $actor->id,
-                'decision' => 'accepted',
+                // See ReturnDailyReportAction's identical note: `approvals.
+                // decision` is a shared enum('approved','rejected') across
+                // every module — 'accepted' is not a member and previously
+                // made every real accept() call fail with a CHECK-constraint
+                // violation. DailyReport.status carries this module's own
+                // 'accepted' terminology; this row uses the shared table's
+                // actual vocabulary.
+                'decision' => 'approved',
                 'reason' => $notes,
                 'decided_at' => now(),
             ]);

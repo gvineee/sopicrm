@@ -13,6 +13,7 @@ use App\Domain\DailyJournal\Exceptions\StaleDailyReportVersionException;
 use App\Domain\DailyJournal\Models\DailyReport;
 use App\Domain\Employees\Models\Team;
 use App\Domain\Projects\Models\Project;
+use App\Domain\Tasks\Models\Task;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DailyJournal\AcceptDailyReportRequest;
 use App\Http\Requests\DailyJournal\ReturnDailyReportRequest;
@@ -90,6 +91,7 @@ class DailyReportController extends Controller
                 'total' => $reports->total(),
             ],
             'filters' => ['status' => $status, 'from' => $from, 'to' => $to],
+            'canCreate' => $request->user()?->can('create', [DailyReport::class, $project]) ?? false,
         ]);
     }
 
@@ -100,6 +102,7 @@ class DailyReportController extends Controller
         return Inertia::render('DailyJournal/Form', [
             'project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->code],
             'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'tasks' => Task::query()->where('project_id', $project->id)->orderBy('title')->get(['id', 'title']),
             'report' => null,
         ]);
     }
@@ -149,11 +152,12 @@ class DailyReportController extends Controller
         $this->ensureReportBelongsToProject($project, $report);
         $this->authorize('update', $report);
 
-        $report->load(['taskLinks']);
+        $report->load(['taskLinks.task']);
 
         return Inertia::render('DailyJournal/Form', [
             'project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->code],
             'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'tasks' => Task::query()->where('project_id', $project->id)->orderBy('title')->get(['id', 'title']),
             'report' => (new DailyReportResource($report))->resolve(),
         ]);
     }
