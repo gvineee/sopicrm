@@ -88,6 +88,19 @@ function openDb(): Promise<IDBDatabase> {
     });
 }
 
+/**
+ * Resolves on `tx.oncomplete`, NOT `request.onsuccess` — the request event
+ * fires the instant the individual operation is queued/applied in memory,
+ * which is BEFORE the browser has actually durably committed the
+ * transaction to disk. Resolving on `request.onsuccess` (the previous,
+ * buggy behavior here) meant the UI could be told "your draft is saved" a
+ * moment before it was actually durable: if the browser/tab was killed in
+ * that narrow window — exactly PWA-01's own "app restart" acceptance
+ * scenario — the draft could silently vanish despite having been
+ * confirmed. `tx.oncomplete` is the real, guaranteed-durable commit signal;
+ * the request's own result is captured when it fires and only handed back
+ * once that commit actually happens.
+ */
 function runInStore<T>(
     storeName: string,
     mode: IDBTransactionMode,
@@ -99,10 +112,18 @@ function runInStore<T>(
                 const tx = db.transaction(storeName, mode);
                 const store = tx.objectStore(storeName);
                 const request = fn(store);
+                let result: T;
 
-                request.onsuccess = () => resolve(request.result);
+                request.onsuccess = () => {
+                    result = request.result;
+                };
                 request.onerror = () => reject(request.error);
-                tx.oncomplete = () => db.close();
+                tx.oncomplete = () => {
+                    db.close();
+                    resolve(result);
+                };
+                tx.onerror = () => reject(tx.error);
+                tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted.'));
             }),
     );
 }

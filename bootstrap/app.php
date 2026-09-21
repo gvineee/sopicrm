@@ -21,6 +21,26 @@ return Application::configure(basePath: dirname(__DIR__))
         // HTTPS request while local development remains HTTP-friendly.
         $middleware->trustProxies(at: '*');
 
+        // PWA-01: without this, `auth:sanctum` on an /api/v1 route only
+        // ever recognizes a bearer token, never this app's own first-party
+        // browser session — every /api/v1/... route already written with
+        // `auth:sanctum` (api-dailyjournal.php, this ticket's own
+        // api-tasks.php) assumed Sanctum's SPA stateful-session mode was
+        // active, but it was never actually registered. Confirmed missing
+        // by a real 401 from a real browser session hitting
+        // OfflineSyncController while building this ticket's own
+        // Playwright end-to-end test — `php artisan test`'s `actingAs()`
+        // never exercises real guard resolution, so no existing test could
+        // have caught this. `statefulApi()` inserts
+        // EnsureFrontendRequestsAreStateful ahead of the `api` group,
+        // which recognizes a request as first-party only when it's already
+        // same-session/CSRF-protected (config/sanctum.php's `stateful`
+        // domain list) — machine-token callers (the device-connector,
+        // DailyJournal's own external callers if any) are unaffected, since
+        // they never match a stateful domain and fall through to normal
+        // bearer-token auth exactly as before.
+        $middleware->statefulApi();
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [

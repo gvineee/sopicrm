@@ -26,6 +26,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -127,12 +128,33 @@ class AuthModuleServiceProvider extends ServiceProvider
             AssignRequestId::class,
         ]);
 
-        // The `api` group carries no session middleware — Sanctum's guard
-        // resolves $request->user() straight from the bearer token, with no
-        // StartSession-style ordering dependency — so prepending to the
-        // front (before SubstituteBindings) is safe here, unlike `web`.
-        $kernel->prependMiddlewareToGroup('api', AssignRequestId::class);
-        $kernel->prependMiddlewareToGroup('api', SetCurrentOrganization::class);
+        // PWA-01: bootstrap/app.php now calls `statefulApi()` (needed so
+        // resources/js/lib/taskOfflineSync.ts's browser-session requests to
+        // /api/v1/... are recognized at all, not just bearer-token
+        // callers), which puts Sanctum's own
+        // EnsureFrontendRequestsAreStateful middleware on the `api` group.
+        // That middleware is what makes the SESSION-backed guard actually
+        // resolvable for a stateful request — exactly the same ordering
+        // hazard the `web` group fix above already documents: prepending
+        // SetCurrentOrganization ahead of it made `$request->user()`
+        // resolve null for every real browser-session /api/v1 request
+        // (confirmed directly: a genuine 404 from RLS silently hiding
+        // every row once app.current_org_id was left empty, while
+        // `auth:sanctum` itself still passed since it uses the exact
+        // guard the earlier stateful-session middleware sets up). Insert
+        // after it when present; a machine-token-only deployment that
+        // never calls `statefulApi()` won't have this middleware in the
+        // group at all, so the original prepend-to-front behavior is kept
+        // as the fallback for that case.
+        if (in_array(EnsureFrontendRequestsAreStateful::class, $kernel->getMiddlewareGroups()['api'] ?? [], true)) {
+            $this->insertMiddlewareAfter($kernel, 'api', EnsureFrontendRequestsAreStateful::class, [
+                SetCurrentOrganization::class,
+                AssignRequestId::class,
+            ]);
+        } else {
+            $kernel->prependMiddlewareToGroup('api', AssignRequestId::class);
+            $kernel->prependMiddlewareToGroup('api', SetCurrentOrganization::class);
+        }
 
         $this->app->make('router')->aliasMiddleware('idempotency', EnsureIdempotencyKey::class);
     }
@@ -156,5 +178,33 @@ class AuthModuleServiceProvider extends ServiceProvider
         $groups[$group] = $current;
 
         $ref->setValue($kernel, $groups);
+
+        // PWA-01: a real, confirmed bug found while building this ticket's
+        // own end-to-end test — mutating `$kernel->middlewareGroups`
+        // directly via reflection (this method's only job) does NOT
+        // propagate to `Illuminate\Routing\Router`'s OWN separate copy of
+        // the middleware groups, which is what request-time route matching
+        // actually reads. The Kernel's own public `prependMiddlewareToGroup()`/
+        // `appendMiddlewareToGroup()` methods each call the Kernel's
+        // protected `syncMiddlewareToRouter()` afterward specifically to
+        // keep the Router's copy current; this reflection-based insert
+        // skipped that step entirely. This had been silently masked for
+        // the `web` group this whole time by a side effect: the `api`
+        // group's OWN prepend calls used the real public methods (which DO
+        // sync), and syncMiddlewareToRouter() re-syncs EVERY group, not
+        // just the one being modified — so `web`'s reflection-only edit
+        // above got synced as an incidental side effect of `api`'s
+        // separate, legitimate calls. The moment this ticket needed the
+        // exact same `insertMiddlewareAfter()` helper for the `api` group
+        // too (Sanctum's stateful-session ordering fix), that accidental
+        // safety net disappeared for BOTH groups at once — confirmed via a
+        // real browser request: SetCurrentOrganization's own log line never
+        // fired at all, RLS silently returned nothing, a real employee
+        // record read back as "not found." Never rely on incidental
+        // side effects from unrelated code for a correctness requirement —
+        // call the real sync explicitly here instead.
+        $syncMethod = new \ReflectionMethod($kernel, 'syncMiddlewareToRouter');
+        $syncMethod->setAccessible(true);
+        $syncMethod->invoke($kernel);
     }
 }

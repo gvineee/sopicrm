@@ -34,6 +34,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // real Tasks-backed data via App\Http\Controllers\MyDayController — the
     // static placeholder (docs/decisions.md DEC-050) is retired.
     Route::get('my-day', [MyDayController::class, 'index'])->name('my-day');
+
+    // PWA-01: dismiss a `for_review` OfflineSyncSubmission the current user
+    // can see on their own My Day page — acknowledgement only, never
+    // reprocesses the original action.
+    Route::post('my-day/offline-review/{submission}/acknowledge', [MyDayController::class, 'acknowledgeOfflineReview'])
+        ->name('my-day.offline-review.acknowledge');
 });
 
 if (app()->environment(['local', 'testing'])) {

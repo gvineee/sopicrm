@@ -8,6 +8,7 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import UserInfo from '@/components/UserInfo.vue';
+import { clearProtectedData } from '@/lib/offlineQueue';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
@@ -16,11 +17,28 @@ type Props = {
     user: User;
 };
 
-const handleLogout = () => {
-    router.flushAll();
-};
+const props = defineProps<Props>();
 
-defineProps<Props>();
+// PWA-01 hard requirement: logout must clear this user's own offline
+// drafts/photos so they never leak into whichever account uses this device
+// next — this app's only real "user switch" boundary (no separate
+// account-switch feature exists). The click is intercepted (preventDefault)
+// so the wipe genuinely finishes — real IndexedDB deletes, not
+// instantaneous — BEFORE the logout navigation actually starts, rather than
+// racing a page unload that could cut the wipe off partway through.
+const handleLogout = async (event: MouseEvent) => {
+    event.preventDefault();
+
+    const organizationId = props.user.organization_id as string | undefined;
+    const userId = props.user.id as unknown as string | undefined;
+
+    if (organizationId && userId) {
+        await clearProtectedData(organizationId, userId);
+    }
+
+    router.flushAll();
+    router.post(logout().url);
+};
 </script>
 
 <template>

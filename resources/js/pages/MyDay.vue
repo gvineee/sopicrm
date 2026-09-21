@@ -7,16 +7,17 @@
  * (App\Http\Controllers\Tasks\TaskController) — no new mobile-only business
  * logic, per the ticket's own instruction.
  */
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, Clock, PlayCircle, RotateCcw } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import BottomSheet from '@/components/mobile/BottomSheet.vue';
 import CameraCapture from '@/components/mobile/CameraCapture.vue';
 import TaskCard from '@/components/mobile/TaskCard.vue';
 import EmptyState from '@/components/states/EmptyState.vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import type { StatusDescriptor } from '@/types';
+import { enqueuePhoto, enqueueSubmission, replayMyDayQueue } from '@/lib/taskOfflineSync';
+import type { OfflineQueueItemStatus, StatusDescriptor } from '@/types';
 
 type TaskAttachment = { id: string; caption: string | null };
 
@@ -41,6 +42,9 @@ const props = withDefaults(
         inReview: DayTask[];
         returned: DayTask[];
         employees: Array<{ id: string; first_name: string; last_name: string }>;
+        organizationId?: string;
+        userId?: string;
+        offlineReviewItems?: Array<{ id: string; kind: string; taskId: string | null; reason: string | null; createdAt: string | null }>;
     }>(),
     {
         hasEmployeeRecord: true,
@@ -49,6 +53,9 @@ const props = withDefaults(
         inReview: () => [],
         returned: () => [],
         employees: () => [],
+        organizationId: undefined,
+        userId: undefined,
+        offlineReviewItems: () => [],
     },
 );
 
@@ -130,23 +137,99 @@ const unblockForm = useForm({ reason: '' });
 const blockForm = useForm({ reason: '', blocked_owner_employee_id: '' });
 const showBlockSection = ref(false);
 
-function capturePhoto(file: File) {
-    const task = sheetTask.value;
-    if (!task) return;
+// PWA-01: offline draft/replay for exactly the two action kinds the backend
+// schema (App\Domain\Notifications\Models\OfflineSyncSubmission) already
+// anticipates — photo evidence and the final task submission. `start`/
+// `block`/`unblock` stay online-only, a deliberate scope choice (that
+// table's own `kind` enum is closed to `comment`/`photo`/`task_submission`
+// — widening it is a schema change this ticket doesn't make).
+const photoLocalStatus = ref<OfflineQueueItemStatus | null>(null);
+const submitLocalStatus = ref<OfflineQueueItemStatus | null>(null);
+const localSubmitError = ref<string | null>(null);
 
-    attachmentForm.file = file;
-    attachmentForm.post(`/projects/${task.projectId}/tasks/${task.id}/attachments`, {
-        preserveScroll: true,
-        forceFormData: true,
-        onSuccess: () => {
-            attachmentForm.reset();
-        },
-    });
+function isOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
-function submitTask() {
+async function capturePhoto(file: File) {
     const task = sheetTask.value;
-    if (!task) return;
+    if (!task || !props.organizationId || !props.userId) return;
+
+    if (isOffline()) {
+        photoLocalStatus.value = 'queued';
+        await enqueuePhoto(
+            props.organizationId,
+            props.userId,
+            { taskId: task.id, projectId: task.projectId },
+            file,
+        );
+
+        return;
+    }
+
+    attachmentForm.file = file;
+    attachmentForm
+        .post(`/projects/${task.projectId}/tasks/${task.id}/attachments`, {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                attachmentForm.reset();
+            },
+            onError: async () => {
+                // A request that fails to even reach the server (not a
+                // validation 422) while `navigator.onLine` had not yet
+                // flipped false is still a real connectivity failure —
+                // queue it rather than leaving the photo silently lost.
+                if (isOffline()) {
+                    photoLocalStatus.value = 'queued';
+                    await enqueuePhoto(
+                        props.organizationId!,
+                        props.userId!,
+                        { taskId: task.id, projectId: task.projectId },
+                        file,
+                    );
+                }
+            },
+        });
+}
+
+async function submitTask() {
+    const task = sheetTask.value;
+    if (!task || !props.organizationId || !props.userId) return;
+
+    localSubmitError.value = null;
+
+    if (isOffline()) {
+        // Deliberate scope boundary: an offline submit is only queued when
+        // the task's already-server-confirmed attachments already satisfy
+        // its photo-evidence requirement. A photo captured in this SAME
+        // offline session has no server attachment id yet (that only
+        // exists after its own replay succeeds), and chaining "replay the
+        // photo, then patch the queued submission with the id it produced,
+        // then replay the submission" is real cross-item coordination this
+        // pass does not build — documented here rather than silently
+        // half-supported. Taking photos offline still always works (queued
+        // as its own item, replayed independently); only a submit that
+        // would need one of THIS session's not-yet-uploaded photos to
+        // satisfy the evidence requirement is blocked with a clear message.
+        if (task.requiresPhotoEvidence && task.attachments.length < task.minRequiredPhotos) {
+            localSubmitError.value = 'ფოტო მტკიცებულება საჭიროა კავშირის აღდგენამდე ვერ დასრულდება — ატვირთეთ ფოტო კავშირის აღდგენისას.';
+
+            return;
+        }
+
+        submitLocalStatus.value = 'queued';
+        await enqueueSubmission(props.organizationId, props.userId, {
+            taskId: task.id,
+            projectId: task.projectId,
+            comment: submitForm.comment,
+            submitted_quantity: submitForm.submitted_quantity || null,
+            attachment_ids: task.attachments.map((attachment) => attachment.id),
+        });
+        closeSheet();
+
+        return;
+    }
 
     submitForm
         .transform((data) => ({
@@ -158,6 +241,53 @@ function submitTask() {
             preserveScroll: true,
             onSuccess: () => closeSheet(),
         });
+}
+
+const isReplaying = ref(false);
+
+async function replayQueue() {
+    if (!props.organizationId || !props.userId || isReplaying.value) return;
+
+    isReplaying.value = true;
+
+    try {
+        const result = await replayMyDayQueue(props.organizationId, props.userId);
+
+        if (result.sent > 0 || result.conflict > 0) {
+            // Refresh this page's own props (task/attachment lists, the
+            // offline-review section) so a just-replayed submission's real
+            // server-side effect is visible immediately, without a full
+            // reload discarding local UI state like the open sheet.
+            router.reload({ only: ['today', 'overdue', 'inReview', 'returned', 'offlineReviewItems'] });
+        }
+    } finally {
+        isReplaying.value = false;
+    }
+}
+
+function handleOnline() {
+    void replayQueue();
+}
+
+onMounted(() => {
+    window.addEventListener('online', handleOnline);
+    if (!isOffline()) {
+        void replayQueue();
+    }
+});
+
+onUnmounted(() => {
+    window.removeEventListener('online', handleOnline);
+});
+
+const acknowledgeForms = new Map<string, ReturnType<typeof useForm>>();
+
+function acknowledgeReviewItem(id: string) {
+    if (!acknowledgeForms.has(id)) {
+        acknowledgeForms.set(id, useForm({}));
+    }
+
+    acknowledgeForms.get(id)!.post(`/my-day/offline-review/${id}/acknowledge`, { preserveScroll: true });
 }
 
 function unblockTask() {
@@ -198,6 +328,19 @@ function reportBlocker() {
             title="დღეს დავალება არ გაქვთ"
             description="ახალი დავალების მინიჭებისას აქ გამოჩნდება."
         />
+
+        <div v-if="offlineReviewItems.length" class="flex flex-col gap-3">
+            <h2 class="text-sm font-semibold">საჭიროებს შემოწმებას</h2>
+            <div
+                v-for="item in offlineReviewItems"
+                :key="item.id"
+                class="border-border bg-amber-500/10 flex flex-col gap-2 rounded-lg border p-3 text-sm"
+            >
+                <p>ოფლაინში გაგზავნილი {{ item.kind === 'photo' ? 'ფოტო' : 'დასრულების მოთხოვნა' }} ავტომატურად ვერ დამუშავდა.</p>
+                <p v-if="item.reason" class="text-muted-foreground text-xs">{{ item.reason }}</p>
+                <Button variant="outline" size="sm" class="w-fit" @click="acknowledgeReviewItem(item.id)">გასაგებია</Button>
+            </div>
+        </div>
 
         <div v-if="overdue.length" class="flex flex-col gap-3">
             <h2 class="text-destructive text-sm font-semibold">ვადაგადაცილებული</h2>
@@ -284,10 +427,16 @@ function reportBlocker() {
                 <Textarea v-model="submitForm.comment" rows="3" placeholder="კომენტარი (არასავალდებულო)" />
                 <p v-if="submitForm.errors.comment" class="text-destructive text-sm">{{ submitForm.errors.comment }}</p>
 
-                <CameraCapture :status="attachmentForm.processing ? 'sending' : attachmentForm.wasSuccessful ? 'sent' : null" @capture="capturePhoto" />
+                <CameraCapture
+                    :status="photoLocalStatus ?? (attachmentForm.processing ? 'sending' : attachmentForm.wasSuccessful ? 'sent' : null)"
+                    @capture="capturePhoto"
+                />
                 <p v-if="attachmentForm.errors.file" class="text-destructive text-sm">{{ attachmentForm.errors.file }}</p>
 
-                <Button class="h-11 w-full text-base" :disabled="submitForm.processing" @click="submitTask">დასრულებაზე გაგზავნა</Button>
+                <Button class="h-11 w-full text-base" :disabled="submitForm.processing || submitLocalStatus === 'queued'" @click="submitTask">
+                    {{ submitLocalStatus === 'queued' ? 'ლოკალურად შენახულია — გაიგზავნება კავშირის აღდგენისას' : 'დასრულებაზე გაგზავნა' }}
+                </Button>
+                <p v-if="localSubmitError" class="text-destructive text-sm">{{ localSubmitError }}</p>
                 <p v-if="submitFormExtraErrors.attachments" class="text-destructive text-sm">{{ submitFormExtraErrors.attachments }}</p>
                 <p v-if="submitFormExtraErrors.status" class="text-destructive text-sm">{{ submitFormExtraErrors.status }}</p>
 
