@@ -43,6 +43,10 @@ class UserAccessController extends Controller
 
         $users = User::query()
             ->where('organization_id', $organizationId)
+            // QUEUE-01: a system actor has no roles/permissions to manage —
+            // nothing here is meant for it, so it's excluded rather than
+            // shown as an unmanageable, confusing row.
+            ->where('is_system_account', false)
             ->orderBy('name')
             ->get()
             ->map(fn (User $user): array => [

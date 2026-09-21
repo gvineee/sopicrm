@@ -59,6 +59,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $phone
  * @property bool $is_active
  * @property bool $is_platform_admin
+ * @property bool $is_system_account
  * @property Carbon|null $last_login_at
  * @property Carbon|null $email_verified_at
  * @property string $password
@@ -69,9 +70,11 @@ use Spatie\Permission\Traits\HasRoles;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-// `is_platform_admin` (ADMIN-01) is deliberately excluded here — it must
-// only ever be set via App\Domain\Auth\Actions\GrantPlatformAdminAction,
-// never through any ordinary profile/user-update form's mass assignment.
+// `is_platform_admin` (ADMIN-01) and `is_system_account` (QUEUE-01) are
+// deliberately excluded here — the former must only ever be set via
+// App\Domain\Auth\Actions\GrantPlatformAdminAction, the latter only via
+// App\Domain\Auth\Actions\GetOrCreateSystemActorAction, never through any
+// ordinary profile/user-update form's mass assignment.
 #[Fillable(['name', 'email', 'password', 'phone', 'is_active'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'mfa_secret_encrypted', 'personal_id_number_encrypted'])]
 class User extends Authenticatable implements PasskeyUser
@@ -104,6 +107,7 @@ class User extends Authenticatable implements PasskeyUser
             'two_factor_confirmed_at' => 'datetime',
             'is_active' => 'boolean',
             'is_platform_admin' => 'boolean',
+            'is_system_account' => 'boolean',
             'last_login_at' => 'datetime',
             'personal_id_number_encrypted' => 'encrypted',
             'mfa_secret_encrypted' => 'encrypted',

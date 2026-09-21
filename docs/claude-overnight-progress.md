@@ -2,6 +2,28 @@
 
 Live checkpoint file. Update after every bounded task per `docs/claude-overnight-goal.md`'s execution loop. Newest entry on top.
 
+## Completed: QUEUE-01 fully closed out (system actor, incremental attendance, device health-check)
+
+**Status:** done, verified. Closes out QUEUE-01 entirely — the relay/RLS half was already done earlier this session; this is the "system actor" design decision plus the two scheduled commands that decision unblocked.
+
+**The design decision (deferred earlier this session, now made):** a dedicated, non-loginable `is_system_account` User per organization, created lazily/idempotently. Mirrors ADMIN-01's `is_platform_admin` column precedent exactly — durable, typed, excluded from `User::$fillable`, settable only via `App\Domain\Auth\Actions\GetOrCreateSystemActorAction`. `is_active = false` is what actually makes it non-loginable — verified directly against the real `ActiveUserProvider` gate with a known password, not just asserted from the boolean's presence. Email uses the real IANA-reserved `.invalid` TLD (`system-automation+{orgId}@internal.invalid`) — deliberately never a deliverable address.
+
+**Where the system actor must never leak, checked and fixed:** `App\Http\Controllers\Admin\UserAccessController::index()` (ADMIN-02's user list) and `App\Http\Controllers\Projects\ProjectController::show()`'s `availableUsers` membership picker both now exclude `is_system_account = true` rows. `RemoveUserRoleAction`'s "last owner/system_admin" guard needed no change — a system account is never assigned any role in the first place, confirmed by reading rather than assumed.
+
+**`attendance:process-incremental`** (scheduled every 5 minutes, `routes/console.php`): for each real organization, finds employees with a `RawAccessEvent` newer than their own `AttendanceIncrementalCheckpoint.last_processed_at` (new table, one row per employee; a first-ever run looks back a bounded 3-day default, never an employee's entire history) and re-runs `ReconstructAttendanceSessionsAction`, attributing the run to that organization's system actor. Sets/restores `app.current_org_id` per organization inside the loop — same tenant-context discipline this session's `SendTimesheetEmailJob`/`CompleteTelegramLinkAction` already established for a job that must never let one organization's context leak into the next iteration's work. A dedicated two-organization test proves this directly: each org's run creates its OWN system actor and OWN checkpoint row, the two never cross, and no ambient tenant context survives the command's own completion.
+
+**`devices:health-check`** (scheduled every 15 minutes): the proactive half BIO-04's reactive `device_fault` notification (in `RecordDeviceHeartbeatAction`) cannot provide by construction — that Action only fires when a heartbeat DOES arrive and reports bad status; if a connector process dies outright, no heartbeat ever arrives and nothing would otherwise notice. This command flags a device whose `last_heartbeat_at` has gone stale past a configurable threshold, reusing the same `device_fault` NotificationType with a distinct `dedup_key` prefix (`device_fault:stale:...`) so it never collides with the reactive trigger, deduped per calendar day — proven: two consecutive runs against the same still-stale device produce exactly one notification.
+
+**Files changed:** new migration `2026_09_22_100000_add_system_account_and_incremental_checkpoints.php` (additive `users.is_system_account`; additive `attendance_incremental_checkpoints` table + RLS policy, applied to the real dev DB, previewed with `--pretend` first); new `app/Domain/Auth/Actions/GetOrCreateSystemActorAction.php`; new `app/Domain/Attendance/Models/AttendanceIncrementalCheckpoint.php` + `database/factories/AttendanceIncrementalCheckpointFactory.php`; new `app/Console/Commands/{AttendanceProcessIncremental,DevicesHealthCheck}.php`; `routes/console.php` (+2 scheduled entries); `app/Models/User.php` (+`is_system_account` cast/docblock/fillable-exclusion note); `app/Http/Controllers/Admin/UserAccessController.php`, `app/Http/Controllers/Projects/ProjectController.php` (exclude system accounts); new `tests/Feature/Shared/SystemActorAndSchedulingTest.php` (13 tests).
+
+**Contract/schema changes:** additive migration only, applied to the real dev DB.
+
+**Tests/gates:** `php artisan test --compact` → **274 passed / 3 skipped** (1364 assertions; the 1 net new skip is this ticket's own honest "real Postgres RLS proof lives in TenantIsolationRlsTest.php" skip on the sqlite-default connection, not a weakened assertion). `vendor/bin/phpstan` scoped to every file this ticket touched → **0 errors** (whole-app phpstan currently also reports pre-existing errors belonging to a concurrent Stocktake session's own in-progress files — not this ticket's, left untouched). `pint --dirty` on touched files → clean. `npm run types:check`/`npm run build` → passed (no frontend files touched by this ticket).
+
+**Next:** with QUEUE-01 and ASSETS-01 (including Stocktake) both closed out, remaining backlog per `docs/claude-overnight-goal.md`: BIO-03/BIO-04's real-BioStar-API-access-blocked halves, NOTIFY-01's scheduled Telegram digest, OPS-01 execution (needs a real hosting decision), and real Android/iPhone PWA device acceptance — all either externally blocked or the session's own explicitly-recorded remaining scope.
+
+---
+
 ## Completed: PWA-01 (offline draft/replay for My Day, real end-to-end proof)
 
 **Status:** done, verified with a real browser (Playwright, Chromium network-level offline emulation), not just automated PHP/JS tests.

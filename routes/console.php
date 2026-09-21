@@ -31,3 +31,23 @@ Schedule::command('outbox:relay')->everyMinute()->withoutOverlapping();
  * the same "nothing new today" scan.
  */
 Schedule::command('notifications:notify-due-items')->dailyAt('08:00')->withoutOverlapping();
+
+/**
+ * QUEUE-01 (deferred remainder): incremental attendance reconstruction so a
+ * raw event doesn't sit unreconstructed forever between manual triggers.
+ * Every 5 minutes is a deliberate balance — frequent enough that a
+ * clocked-in employee's session reflects reality soon after the event
+ * arrives, not so frequent that it re-scans every organization/employee
+ * pointlessly when nothing new has happened (the command itself is a
+ * no-op per employee unless a genuinely new event exists since their own
+ * checkpoint).
+ */
+Schedule::command('attendance:process-incremental')->everyFiveMinutes()->withoutOverlapping();
+
+/**
+ * QUEUE-01 (deferred remainder): proactive device-silence detection —
+ * catches a connector that stopped heartbeating entirely, which the
+ * reactive device_fault trigger in RecordDeviceHeartbeatAction cannot see
+ * by construction (it only runs when a heartbeat DOES arrive).
+ */
+Schedule::command('devices:health-check')->everyFifteenMinutes()->withoutOverlapping();

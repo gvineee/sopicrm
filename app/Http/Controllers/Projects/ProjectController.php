@@ -151,7 +151,7 @@ class ProjectController extends Controller
                 $project->memberships()->active()->with('user')->orderBy('created_at')->get()
             ),
             'availableUsers' => $canManageMemberships
-                ? User::query()->where('organization_id', $request->user()->organization_id)->orderBy('name')->get(['id', 'name', 'email'])
+                ? User::query()->where('organization_id', $request->user()->organization_id)->where('is_system_account', false)->orderBy('name')->get(['id', 'name', 'email'])
                 : [],
             // Flat list, not just top-level — the WBS tree can be arbitrarily
             // deep (spec section 10) and Eloquent's `with('children')` only
