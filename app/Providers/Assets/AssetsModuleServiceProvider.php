@@ -5,9 +5,11 @@ namespace App\Providers\Assets;
 use App\Domain\Assets\Models\Asset;
 use App\Domain\Assets\Models\AssetIncident;
 use App\Domain\Assets\Models\CustodyTransaction;
+use App\Domain\Assets\Models\Stocktake;
 use App\Policies\AssetIncidentPolicy;
 use App\Policies\AssetPolicy;
 use App\Policies\CustodyTransactionPolicy;
+use App\Policies\StocktakePolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 /**
@@ -23,6 +25,7 @@ class AssetsModuleServiceProvider extends ServiceProvider
         Asset::class => AssetPolicy::class,
         CustodyTransaction::class => CustodyTransactionPolicy::class,
         AssetIncident::class => AssetIncidentPolicy::class,
+        Stocktake::class => StocktakePolicy::class,
     ];
 
     public function boot(): void

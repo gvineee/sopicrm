@@ -65,7 +65,10 @@ function applyFilters() {
                 <h1 class="text-2xl font-semibold">აქტივები</h1>
                 <p class="text-muted-foreground text-sm">ინსტრუმენტები, ტექნიკა და მარაგი — გაცემა, დაბრუნება, გადაცემა.</p>
             </div>
-            <Button v-if="canCreate" as-child><Link href="/assets/create">აქტივის რეგისტრაცია</Link></Button>
+            <div class="flex gap-2">
+                <Button variant="outline" as-child><Link href="/assets/stocktakes">ინვენტარიზაცია</Link></Button>
+                <Button v-if="canCreate" as-child><Link href="/assets/create">აქტივის რეგისტრაცია</Link></Button>
+            </div>
         </div>
 
         <div class="flex gap-2">

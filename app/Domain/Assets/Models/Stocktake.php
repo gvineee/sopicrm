@@ -11,10 +11,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "stocktakes".
  */
+/** @property Carbon|null $session_started_at */
 class Stocktake extends Model
 {
     /** @use HasFactory<StocktakeFactory> */

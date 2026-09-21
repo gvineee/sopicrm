@@ -28,6 +28,11 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.custody.manage',
             'assets.incidents.report',
             'assets.incidents.decide',
+            // Stocktake (ASSETS-01 deferred remainder): deliberately two
+            // permissions, not one — separation of duties between whoever
+            // physically counts and whoever resolves/approves a variance.
+            'assets.stocktakes.perform',
+            'assets.stocktakes.approve',
         ];
 
         foreach ($permissions as $permission) {
@@ -42,6 +47,11 @@ class AssetsPermissionsSeeder extends Seeder
                 'assets.custody.view',
                 'assets.custody.manage',
                 'assets.incidents.report',
+                // A PM may perform a physical count during a site walkthrough
+                // but does not hold final approval authority over a
+                // variance — that separation-of-duties boundary stays with
+                // owner/warehouse_keeper.
+                'assets.stocktakes.perform',
             ],
             // Any employee may report damage/loss of an asset they hold —
             // deciding the outcome stays with warehouse_keeper/owner/PM.

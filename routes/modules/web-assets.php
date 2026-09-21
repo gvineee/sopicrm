@@ -3,6 +3,7 @@
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\AssetIncidentController;
 use App\Http\Controllers\Assets\CustodyTransactionController;
+use App\Http\Controllers\Assets\StocktakeController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -25,4 +26,11 @@ Route::middleware(['auth', 'verified'])->prefix('assets')->name('assets.')->grou
     Route::post('/custody/{transaction}/return', [CustodyTransactionController::class, 'return'])->name('custody.return');
 
     Route::post('/incidents/{incident}/decide', [AssetIncidentController::class, 'decide'])->name('incidents.decide');
+
+    Route::get('/stocktakes', [StocktakeController::class, 'index'])->name('stocktakes.index');
+    Route::post('/stocktakes', [StocktakeController::class, 'store'])->name('stocktakes.store');
+    Route::get('/stocktakes/{stocktake}', [StocktakeController::class, 'show'])->name('stocktakes.show');
+    Route::post('/stocktakes/{stocktake}/lines/{line}/scan', [StocktakeController::class, 'scan'])->name('stocktakes.scan');
+    Route::post('/stocktakes/{stocktake}/lines/{line}/approve-variance', [StocktakeController::class, 'approveVariance'])->name('stocktakes.approve-variance');
+    Route::post('/stocktakes/{stocktake}/complete', [StocktakeController::class, 'complete'])->name('stocktakes.complete');
 });
