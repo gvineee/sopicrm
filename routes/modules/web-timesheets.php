@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/', [TimesheetController::class, 'index'])->name('index');
         Route::post('/generate', [TimesheetController::class, 'generate'])->name('generate');
         Route::get('/{timesheet}', [TimesheetController::class, 'show'])->name('show');
+        Route::get('/{timesheet}/pdf', [TimesheetController::class, 'pdf'])->name('pdf');
         Route::post('/{timesheet}/submit', [TimesheetController::class, 'submit'])->name('submit');
         Route::post('/{timesheet}/approve', [TimesheetController::class, 'approve'])->name('approve');
         Route::post('/{timesheet}/reject', [TimesheetController::class, 'reject'])->name('reject');

@@ -7,6 +7,7 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Payroll\Models\PayPeriod;
 use App\Domain\Timesheets\Actions\ApproveTimesheetAction;
 use App\Domain\Timesheets\Actions\GenerateTimesheetForPayPeriodAction;
+use App\Domain\Timesheets\Actions\GenerateTimesheetPdfAction;
 use App\Domain\Timesheets\Actions\LockTimesheetAction;
 use App\Domain\Timesheets\Actions\RejectTimesheetAction;
 use App\Domain\Timesheets\Actions\SubmitTimesheetAction;
@@ -64,6 +65,23 @@ class TimesheetController extends Controller
             'canApprove' => auth()->user()?->can('approve', $timesheet) ?? false,
             'canLock' => auth()->user()?->can('lock', $timesheet) ?? false,
         ]);
+    }
+
+    /**
+     * TIMESHEET-01: on-demand PDF snapshot, streamed inline (opens in the
+     * browser rather than forcing a download) — matches this codebase's
+     * existing precedent for previewable protected content
+     * (Tasks\TaskController::showAttachment()). Reuses the same `view`
+     * ability the HTML detail page already requires; no separate PDF
+     * permission exists or is needed.
+     */
+    public function pdf(Timesheet $timesheet, GenerateTimesheetPdfAction $action): \Symfony\Component\HttpFoundation\Response
+    {
+        $this->authorize('view', $timesheet);
+
+        $pdf = $action->execute($timesheet);
+
+        return $pdf->stream("tabeli-{$timesheet->id}-v{$timesheet->version}.pdf");
     }
 
     public function generate(GenerateTimesheetRequest $request, GenerateTimesheetForPayPeriodAction $action): RedirectResponse

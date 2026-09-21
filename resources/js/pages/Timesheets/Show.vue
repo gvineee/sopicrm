@@ -69,6 +69,14 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' | 'destru
             </div>
             <p class="text-muted-foreground text-sm">{{ timesheet.pay_period?.starts_on }} – {{ timesheet.pay_period?.ends_on }}</p>
             <p v-if="timesheet.rejected_reason" class="text-destructive mt-1 text-sm">უარყოფის მიზეზი: {{ timesheet.rejected_reason }}</p>
+            <a
+                :href="`/timesheets/${timesheet.id}/pdf`"
+                target="_blank"
+                rel="noopener"
+                class="text-primary mt-2 inline-block text-sm hover:underline"
+            >
+                PDF ნახვა (ვერსია {{ timesheet.version }})
+            </a>
         </div>
 
         <div class="border-border bg-card overflow-hidden rounded-xl border">

@@ -546,6 +546,18 @@ This pass built the piece that was actually missing and load-bearing: `App\Domai
 
 ---
 
+### DEC-086 — Timesheet PDF snapshot: `barryvdh/laravel-dompdf` + a real, verified Georgian font extracted from `@fontsource/noto-sans-georgian`
+
+**Decision:** `composer require barryvdh/laravel-dompdf` (v3.1.2, wrapping `dompdf/dompdf` v3.1.6) is the chosen PDF engine for TIMESHEET-01 — the standard, actively-maintained Laravel dompdf integration, HTML/CSS-to-PDF (renders a real Blade view, not a second UI to maintain). No Georgian-capable font ships with dompdf or exists anywhere in this repo, and dompdf does not fail loudly when a font-family has no registered glyphs for a script — it silently renders empty boxes. Sourced a real, complete Georgian glyph set (`Noto Sans Georgian`, SIL OFL license, U+10A0-U+10FF fully covered — confirmed via `fontTools`' cmap parser against both weights before trusting it) from the `@fontsource/noto-sans-georgian` npm package's WOFF2 files, decompressed to real `.ttf` with Python's `fonttools` (`pip install fonttools brotli`; `python -m fontTools.ttLib.woff2 decompress <in> -o <out>`) — that npm package itself was never added as a project dependency (`npm install --no-save`, then `npm uninstall` after extraction; confirmed `package.json`/`package-lock.json` unchanged), since this is a one-time PHP/dompdf font need, not a frontend asset. The two extracted TTFs (`storage/fonts/NotoSansGeorgian-{Regular,Bold}.ttf`) are committed; dompdf's own generated cache artifacts in the same directory (hashed `.ttf`/`.ufm` copies, `installed-fonts.json`) are not (`storage/fonts/.gitignore`) — `App\Domain\Timesheets\Support\TimesheetPdfFonts::register()` is idempotent and re-derives them on first use in any environment.
+
+**Verification, not just "it generated a file":** rendered a real test PDF containing Georgian employee-name/label text and confirmed actual Georgian Unicode glyphs (not tofu boxes) render in the output — see `tests/Feature/Timesheets/TimesheetPdfTest.php` for the automated version of this check and its own docblock for exactly what could/couldn't be asserted in CI.
+
+**Scope boundary (explicit, for whoever picks up TIMESHEET-EMAIL-01 next):** `GenerateTimesheetPdfAction` renders on-demand and streams inline — nothing is persisted. TIMESHEET-EMAIL-01's own ticket wording ("immutable attachment snapshot") needs a stored, versioned copy for a mail attachment; that storage layer does not exist yet and must be added there, not assumed present.
+
+**Date:** 2026-09-21. **Author:** Claude Code (TIMESHEET-01).
+
+---
+
 ## Pending dependencies
 
 Later agents append here: exact package name + version constraint + which module needs it + why. The Integration agent consumes this whole section in one pass, runs `composer require`/`npm install` accordingly, resolves conflicts, and then updates each entry's status to "Installed (vX.Y.Z)".
