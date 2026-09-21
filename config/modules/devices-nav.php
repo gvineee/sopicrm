@@ -29,6 +29,12 @@ return [
                 'route' => 'devices.external-mappings.index',
                 'permission' => 'devices.external_mappings.view',
             ],
+            [
+                'label' => 'საიტები',
+                'icon' => 'map-pin',
+                'route' => 'sites.index',
+                'permission' => 'devices.view',
+            ],
         ],
     ],
 ];

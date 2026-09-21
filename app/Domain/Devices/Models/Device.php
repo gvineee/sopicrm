@@ -83,6 +83,17 @@ class Device extends Model
     }
 
     /**
+     * TENANT-01: a Device gets no own `company_id` column — its company is
+     * resolved transitively via whichever Site it's mounted at, so the same
+     * fact never has to be kept in sync in two places. NULL when the
+     * device has no site, or its site is itself unmapped.
+     */
+    public function resolvedCompanyId(): ?string
+    {
+        return $this->site?->company_id;
+    }
+
+    /**
      * @return HasMany<DeviceCapability, $this>
      */
     public function capabilities(): HasMany

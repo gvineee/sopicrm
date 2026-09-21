@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Domain\Devices\Models\Device;
+use App\Domain\Devices\Support\CompanyScope;
 use App\Models\User;
 
 class DevicePolicy
@@ -15,7 +16,8 @@ class DevicePolicy
     public function view(User $user, Device $device): bool
     {
         return $device->organization_id === $user->organization_id
-            && ($user->hasRole('owner') || $user->can('devices.view'));
+            && ($user->hasRole('owner') || $user->can('devices.view'))
+            && CompanyScope::allows($device->resolvedCompanyId(), $user);
     }
 
     public function create(User $user): bool
@@ -26,7 +28,8 @@ class DevicePolicy
     public function update(User $user, Device $device): bool
     {
         return $device->organization_id === $user->organization_id
-            && ($user->hasRole('owner') || $user->can('devices.manage'));
+            && ($user->hasRole('owner') || $user->can('devices.manage'))
+            && CompanyScope::allows($device->resolvedCompanyId(), $user);
     }
 
     public function operateSimulator(User $user, Device $device): bool

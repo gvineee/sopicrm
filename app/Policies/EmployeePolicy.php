@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Domain\Devices\Support\CompanyScope;
 use App\Domain\Employees\Models\Employee;
 use App\Models\User;
 
@@ -31,15 +32,21 @@ class EmployeePolicy
             return false;
         }
 
-        if ($user->can('employees.employees.view')) {
-            return true;
-        }
-
+        // Seeing your own record, or your own brigade member's, is a
+        // narrow relationship-based grant, not the broad
+        // org-wide-roster-visibility permission — TENANT-01's
+        // company-scoping only tightens the broad grant below, it never
+        // blocks a person from seeing themself or their own team.
         if ($employee->user_id !== null && $employee->user_id === $user->id) {
             return true;
         }
 
-        return $this->isForemanOfEmployee($user, $employee);
+        if ($this->isForemanOfEmployee($user, $employee)) {
+            return true;
+        }
+
+        return $user->can('employees.employees.view')
+            && CompanyScope::allows($employee->company_id, $user);
     }
 
     public function create(User $user): bool
@@ -50,7 +57,8 @@ class EmployeePolicy
     public function update(User $user, Employee $employee): bool
     {
         return $employee->organization_id === $user->organization_id
-            && $user->can('employees.employees.manage');
+            && $user->can('employees.employees.manage')
+            && CompanyScope::allows($employee->company_id, $user);
     }
 
     /**

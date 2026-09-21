@@ -4,6 +4,7 @@ use App\Http\Controllers\Devices\CredentialController;
 use App\Http\Controllers\Devices\DeviceController;
 use App\Http\Controllers\Devices\DeviceSimulatorController;
 use App\Http\Controllers\Devices\ExternalIdentifierMappingController;
+use App\Http\Controllers\Devices\SiteController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -32,4 +33,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('device-external-mappings', [ExternalIdentifierMappingController::class, 'index'])->name('devices.external-mappings.index');
     Route::post('device-external-mappings/{mapping}/confirm', [ExternalIdentifierMappingController::class, 'confirm'])->name('devices.external-mappings.confirm');
     Route::post('device-external-mappings/{mapping}/ignore', [ExternalIdentifierMappingController::class, 'ignore'])->name('devices.external-mappings.ignore');
+
+    // TENANT-01
+    Route::get('sites', [SiteController::class, 'index'])->name('sites.index');
+    Route::post('sites/{site}/assign-company', [SiteController::class, 'assignCompany'])->name('sites.assign-company');
 });

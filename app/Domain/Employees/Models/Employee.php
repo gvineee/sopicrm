@@ -2,6 +2,7 @@
 
 namespace App\Domain\Employees\Models;
 
+use App\Domain\Companies\Models\Company;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Domain\Shared\Models\Attachment;
@@ -38,6 +39,7 @@ class Employee extends Model
 
     protected $fillable = [
         'organization_id',
+        'company_id',
         'internal_code',
         'first_name',
         'last_name',
@@ -107,6 +109,18 @@ class Employee extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * TENANT-01 (nullable): NULL means unmapped — see
+     * App\Domain\Devices\Support\CompanyScope for the shared visibility
+     * rule this participates in.
+     *
+     * @return BelongsTo<Company, $this>
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /**
