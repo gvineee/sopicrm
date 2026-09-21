@@ -23,6 +23,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('/{timesheet}/email/{delivery}/retry', [TimesheetController::class, 'emailRetry'])->name('email.retry');
     });
 
+    // TIMESHEET-EMAIL-02: batch send. Not nested under a single
+    // {timesheet} — a batch spans an arbitrary selected set.
+    Route::prefix('timesheet-email-batches')->name('timesheet-email-batches.')->group(function (): void {
+        Route::get('/', [TimesheetController::class, 'emailBatchIndex'])->name('index');
+        Route::post('/', [TimesheetController::class, 'emailBatchStore'])->name('store');
+        Route::get('/{batch}', [TimesheetController::class, 'emailBatchShow'])->name('show');
+        Route::post('/{batch}/cancel', [TimesheetController::class, 'emailBatchCancel'])->name('cancel');
+        Route::post('/{batch}/deliveries/{delivery}/retry', [TimesheetController::class, 'emailBatchDeliveryRetry'])->name('deliveries.retry');
+    });
+
     Route::prefix('attendance-adjustments')->name('attendance-adjustments.')->group(function (): void {
         Route::get('/', [AttendanceAdjustmentController::class, 'index'])->name('index');
         Route::post('/', [AttendanceAdjustmentController::class, 'store'])->name('store');

@@ -53,4 +53,18 @@ class TimesheetPolicy
         return $timesheet->organization_id === $user->organization_id
             && $user->can('timesheets.timesheets.approve');
     }
+
+    /**
+     * TIMESHEET-EMAIL-02: the class-level gate for the batch-send screen
+     * (no single Timesheet instance exists yet at that point — each
+     * individual selected timesheet is still separately re-checked via
+     * `send()` above, inside App\Domain\Timesheets\Actions\
+     * CreateTimesheetEmailBatchAction, so a timesheet the actor cannot
+     * `send` individually is skipped even if this class-level check
+     * passes).
+     */
+    public function sendBatch(User $user): bool
+    {
+        return $user->can('timesheets.timesheets.approve');
+    }
 }

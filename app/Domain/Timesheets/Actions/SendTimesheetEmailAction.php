@@ -7,11 +7,10 @@ use App\Domain\Shared\Models\Attachment;
 use App\Domain\Shared\Services\AuditLogger;
 use App\Domain\Timesheets\Exceptions\EmailDeliveryNotRetryableException;
 use App\Domain\Timesheets\Models\TimesheetEmailDelivery;
+use App\Domain\Timesheets\Support\TimesheetSnapshotResolver;
 use App\Jobs\Timesheets\SendTimesheetEmailJob;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * TIMESHEET-EMAIL-01: creates (or reuses) an immutable PDF snapshot for the
@@ -113,41 +112,6 @@ class SendTimesheetEmailAction
 
     private function resolveSnapshot(Timesheet $timesheet, User $actor): Attachment
     {
-        $existing = Attachment::query()
-            ->where('owner_type', Timesheet::class)
-            ->where('owner_id', $timesheet->id)
-            ->where('status', 'available')
-            ->where('classification', 'timesheet_snapshot_v'.$timesheet->version)
-            ->first();
-
-        if ($existing !== null) {
-            return $existing;
-        }
-
-        $pdf = app(GenerateTimesheetPdfAction::class)->execute($timesheet);
-        $bytes = $pdf->output();
-
-        $storagePath = sprintf('timesheets/%s/%s.pdf', $timesheet->id, (string) Str::uuid());
-        Storage::disk('private')->put($storagePath, $bytes);
-
-        return Attachment::create([
-            'owner_type' => Timesheet::class,
-            'owner_id' => $timesheet->id,
-            'disk' => 'private',
-            'storage_path' => $storagePath,
-            'original_filename' => "tabeli-{$timesheet->id}-v{$timesheet->version}.pdf",
-            'mime_type' => 'application/pdf',
-            'byte_size' => strlen($bytes),
-            'checksum' => hash('sha256', $bytes),
-            // Server-generated content (a PDF this application itself just
-            // rendered), never a client upload — the scanning/quarantine
-            // half of Attachment's lifecycle exists for untrusted uploads
-            // (App\Domain\Tasks\Actions\UploadTaskAttachment's docblock
-            // explains the same gap for that path); there is nothing to
-            // scan here, so this goes straight to `available`.
-            'status' => 'available',
-            'uploaded_by_user_id' => $actor->id,
-            'classification' => 'timesheet_snapshot_v'.$timesheet->version,
-        ]);
+        return TimesheetSnapshotResolver::resolve($timesheet, $actor);
     }
 }

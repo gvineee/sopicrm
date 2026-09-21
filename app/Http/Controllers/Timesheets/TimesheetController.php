@@ -6,19 +6,25 @@ use App\Domain\Attendance\Models\Timesheet;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Payroll\Models\PayPeriod;
 use App\Domain\Timesheets\Actions\ApproveTimesheetAction;
+use App\Domain\Timesheets\Actions\CancelTimesheetEmailBatchAction;
+use App\Domain\Timesheets\Actions\CreateTimesheetEmailBatchAction;
 use App\Domain\Timesheets\Actions\GenerateTimesheetForPayPeriodAction;
 use App\Domain\Timesheets\Actions\GenerateTimesheetPdfAction;
 use App\Domain\Timesheets\Actions\LockTimesheetAction;
 use App\Domain\Timesheets\Actions\RejectTimesheetAction;
+use App\Domain\Timesheets\Actions\RetryTimesheetEmailBatchDeliveryAction;
 use App\Domain\Timesheets\Actions\SendTimesheetEmailAction;
 use App\Domain\Timesheets\Actions\SubmitTimesheetAction;
+use App\Domain\Timesheets\Models\TimesheetEmailBatch;
 use App\Domain\Timesheets\Models\TimesheetEmailDelivery;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Timesheets\ApproveTimesheetRequest;
+use App\Http\Requests\Timesheets\CreateTimesheetEmailBatchRequest;
 use App\Http\Requests\Timesheets\GenerateTimesheetRequest;
 use App\Http\Requests\Timesheets\RejectTimesheetRequest;
 use App\Http\Requests\Timesheets\SendTimesheetEmailRequest;
 use App\Http\Requests\Timesheets\TimesheetVersionActionRequest;
+use App\Http\Resources\Timesheets\TimesheetEmailBatchResource;
 use App\Http\Resources\Timesheets\TimesheetEmailDeliveryResource;
 use App\Http\Resources\Timesheets\TimesheetResource;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -51,11 +57,129 @@ class TimesheetController extends Controller
             'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
             'payPeriods' => PayPeriod::query()->orderByDesc('starts_on')->get(['id', 'starts_on', 'ends_on']),
             'canGenerate' => $request->user()->can('generate', Timesheet::class),
+            'canSendBatch' => $request->user()->can('sendBatch', Timesheet::class),
+            'filteredTotal' => $timesheets->total(),
             'filters' => [
                 'employee_id' => $request->string('employee_id')->toString() ?: null,
                 'status' => $request->string('status')->toString() ?: null,
             ],
         ]);
+    }
+
+    /**
+     * TIMESHEET-EMAIL-02: recent batches for the history panel on the Index
+     * page — org-scoped by the model's own tenant scope, no per-batch
+     * Policy check needed beyond the class-level `sendBatch` gate (same
+     * reasoning TimesheetPolicy::sendBatch's own docblock states).
+     */
+    public function emailBatchIndex(Request $request): JsonResponse
+    {
+        $this->authorize('sendBatch', Timesheet::class);
+
+        $batches = TimesheetEmailBatch::query()
+            ->withCount('deliveries')
+            ->with(['deliveries', 'requestedBy'])
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return response()->json(['batches' => TimesheetEmailBatchResource::collection($batches)]);
+    }
+
+    /**
+     * TIMESHEET-EMAIL-02 max bundle size — the ticket's own "დიდ
+     * attachment-ებზე განსაზღვრე ზღვარი" (define a limit for large
+     * attachment sets). Applies to both explicit multi-page selection and
+     * "select all filtered".
+     */
+    private const MAX_BATCH_SIZE = 200;
+
+    public function emailBatchStore(CreateTimesheetEmailBatchRequest $request, CreateTimesheetEmailBatchAction $action): RedirectResponse
+    {
+        $this->authorize('sendBatch', Timesheet::class);
+
+        $timesheetIds = $request->boolean('select_all_filtered')
+            ? $this->resolveFilteredTimesheetIds($request)
+            : $request->validated('timesheet_ids');
+
+        if (count($timesheetIds) > self::MAX_BATCH_SIZE) {
+            return back()->withErrors([
+                'timesheet_ids' => 'ერთ გაგზავნაში მაქსიმუმ '.self::MAX_BATCH_SIZE.' ტაბელია დაშვებული (მონიშნულია '.count($timesheetIds).').',
+            ]);
+        }
+
+        $batch = $action->execute(
+            $timesheetIds,
+            (string) $request->validated('mode'),
+            $request->validated('bundled_recipient_email'),
+            $request->validated('bundled_recipient_user_id'),
+            $request->user(),
+        );
+
+        $skippedCount = count($batch->skipped_details ?? []);
+        $message = $skippedCount > 0
+            ? "გაგზავნა რიგშია — {$skippedCount} ტაბელი გამოტოვებულია (იხილეთ დეტალები)."
+            : 'გაგზავნა რიგშია.';
+
+        return back()->with('toast', ['type' => $skippedCount > 0 ? 'warning' : 'success', 'message' => $message]);
+    }
+
+    /**
+     * TIMESHEET-EMAIL-02 "select all N filtered": re-runs the SAME filter
+     * predicate index() uses, fresh, at commit time — this is what pins the
+     * concrete dataset the ticket requires (a list change between the user
+     * clicking "select all" and this request landing is impossible to
+     * observe from here; the set is whatever matches right now, capped at
+     * MAX_BATCH_SIZE).
+     *
+     * @return list<string>
+     */
+    private function resolveFilteredTimesheetIds(Request $request): array
+    {
+        $employeeId = $request->input('filters.employee_id');
+        $status = $request->input('filters.status');
+
+        $ids = Timesheet::query()
+            ->when($employeeId, fn ($q, $id) => $q->where('employee_id', $id))
+            ->when($status, fn ($q, $s) => $q->where('status', $s))
+            ->orderByDesc('created_at')
+            ->limit(self::MAX_BATCH_SIZE + 1)
+            ->pluck('id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ->all();
+
+        return array_values($ids);
+    }
+
+    public function emailBatchShow(TimesheetEmailBatch $batch): JsonResponse
+    {
+        $this->authorize('sendBatch', Timesheet::class);
+
+        $batch->load(['deliveries' => fn ($q) => $q->withCount('items')->with('requestedBy')]);
+
+        return response()->json(['batch' => new TimesheetEmailBatchResource($batch)]);
+    }
+
+    public function emailBatchCancel(TimesheetEmailBatch $batch, CancelTimesheetEmailBatchAction $action): RedirectResponse
+    {
+        $this->authorize('sendBatch', Timesheet::class);
+
+        $action->execute($batch, request()->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'დარჩენილი გაგზავნები გაუქმდა.']);
+    }
+
+    public function emailBatchDeliveryRetry(
+        TimesheetEmailBatch $batch,
+        TimesheetEmailDelivery $delivery,
+        RetryTimesheetEmailBatchDeliveryAction $action,
+    ): RedirectResponse {
+        $this->authorize('sendBatch', Timesheet::class);
+        abort_unless($delivery->batch_id === $batch->id, 404);
+
+        $action->execute($delivery, request()->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'ხელახლა გაგზავნა რიგშია.']);
     }
 
     public function show(Timesheet $timesheet): Response

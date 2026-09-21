@@ -60,11 +60,15 @@ class SendTimesheetEmailJob implements ShouldQueue
             /** @var TimesheetEmailDelivery $delivery */
             $delivery = TimesheetEmailDelivery::query()->with('attachment')->findOrFail($this->deliveryId);
 
-            if ($delivery->status !== 'queued') {
+            if ($delivery->status !== 'queued' || $delivery->isCancelled()) {
                 // Idempotency: a redelivered job (queue at-least-once
                 // semantics) for a delivery that already finished (sent or
                 // failed-and-not-yet-retried) is a safe no-op, never a
-                // duplicate send.
+                // duplicate send. TIMESHEET-EMAIL-02: a batch delivery
+                // cancelled after being queued (still `status = 'queued'`,
+                // see that migration's docblock) is the same kind of no-op —
+                // always null for a plain TIMESHEET-EMAIL-01 single send, so
+                // this never changes that path's behavior.
                 return;
             }
 
