@@ -10,14 +10,19 @@ use App\Domain\Timesheets\Actions\GenerateTimesheetForPayPeriodAction;
 use App\Domain\Timesheets\Actions\GenerateTimesheetPdfAction;
 use App\Domain\Timesheets\Actions\LockTimesheetAction;
 use App\Domain\Timesheets\Actions\RejectTimesheetAction;
+use App\Domain\Timesheets\Actions\SendTimesheetEmailAction;
 use App\Domain\Timesheets\Actions\SubmitTimesheetAction;
+use App\Domain\Timesheets\Models\TimesheetEmailDelivery;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Timesheets\ApproveTimesheetRequest;
 use App\Http\Requests\Timesheets\GenerateTimesheetRequest;
 use App\Http\Requests\Timesheets\RejectTimesheetRequest;
+use App\Http\Requests\Timesheets\SendTimesheetEmailRequest;
 use App\Http\Requests\Timesheets\TimesheetVersionActionRequest;
+use App\Http\Resources\Timesheets\TimesheetEmailDeliveryResource;
 use App\Http\Resources\Timesheets\TimesheetResource;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -58,13 +63,66 @@ class TimesheetController extends Controller
         $this->authorize('view', $timesheet);
 
         $timesheet->load(['employee', 'payPeriod', 'lines.project']);
+        $canSend = auth()->user()?->can('send', $timesheet) ?? false;
 
         return Inertia::render('Timesheets/Show', [
             'timesheet' => new TimesheetResource($timesheet),
             'canSubmit' => auth()->user()?->can('submit', $timesheet) ?? false,
             'canApprove' => auth()->user()?->can('approve', $timesheet) ?? false,
             'canLock' => auth()->user()?->can('lock', $timesheet) ?? false,
+            'canSend' => $canSend,
+            'emailDeliveries' => $canSend
+                ? TimesheetEmailDeliveryResource::collection(
+                    $timesheet->emailDeliveries()->with('requestedBy')->orderByDesc('created_at')->get()
+                )
+                : [],
+            'defaultRecipientEmail' => $canSend ? $timesheet->employee->user?->email : null,
         ]);
+    }
+
+    /**
+     * TIMESHEET-EMAIL-01: "recipient/subject preview" — computes the
+     * default recipient/subject without sending anything. The actual send
+     * is a separate, explicit POST (emailSend below).
+     */
+    public function emailPreview(Timesheet $timesheet): JsonResponse
+    {
+        $this->authorize('send', $timesheet);
+
+        $timesheet->load(['employee', 'payPeriod']);
+        $employeeName = trim($timesheet->employee->first_name.' '.$timesheet->employee->last_name);
+
+        return response()->json([
+            'recipient_email' => $timesheet->employee->user?->email,
+            'recipient_user_id' => $timesheet->employee->user?->id,
+            'subject' => "თქვენი ტაბელი — {$timesheet->payPeriod->starts_on->toDateString()} — {$timesheet->payPeriod->ends_on->toDateString()}",
+            'employee_name' => $employeeName,
+        ]);
+    }
+
+    public function emailSend(SendTimesheetEmailRequest $request, Timesheet $timesheet, SendTimesheetEmailAction $action): RedirectResponse
+    {
+        $this->authorize('send', $timesheet);
+
+        $action->send(
+            $timesheet,
+            (string) $request->validated('recipient_email'),
+            $request->validated('recipient_user_id'),
+            (string) $request->validated('subject'),
+            $request->user(),
+        );
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'ტაბელის გაგზავნა რიგშია.']);
+    }
+
+    public function emailRetry(Request $request, Timesheet $timesheet, TimesheetEmailDelivery $delivery, SendTimesheetEmailAction $action): RedirectResponse
+    {
+        $this->authorize('send', $timesheet);
+        abort_unless($delivery->timesheet_id === $timesheet->id, 404);
+
+        $action->retry($delivery, $request->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'ხელახლა გაგზავნა რიგშია.']);
     }
 
     /**

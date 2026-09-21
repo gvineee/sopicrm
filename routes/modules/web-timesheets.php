@@ -18,6 +18,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('/{timesheet}/approve', [TimesheetController::class, 'approve'])->name('approve');
         Route::post('/{timesheet}/reject', [TimesheetController::class, 'reject'])->name('reject');
         Route::post('/{timesheet}/lock', [TimesheetController::class, 'lock'])->name('lock');
+        Route::get('/{timesheet}/email/preview', [TimesheetController::class, 'emailPreview'])->name('email.preview');
+        Route::post('/{timesheet}/email', [TimesheetController::class, 'emailSend'])->name('email.send');
+        Route::post('/{timesheet}/email/{delivery}/retry', [TimesheetController::class, 'emailRetry'])->name('email.retry');
     });
 
     Route::prefix('attendance-adjustments')->name('attendance-adjustments.')->group(function (): void {

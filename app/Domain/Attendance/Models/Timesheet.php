@@ -6,6 +6,7 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Payroll\Models\PayPeriod;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
+use App\Domain\Timesheets\Models\TimesheetEmailDelivery;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Database\Factories\TimesheetFactory;
@@ -99,6 +100,16 @@ class Timesheet extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    /**
+     * TIMESHEET-EMAIL-01.
+     *
+     * @return HasMany<TimesheetEmailDelivery, $this>
+     */
+    public function emailDeliveries(): HasMany
+    {
+        return $this->hasMany(TimesheetEmailDelivery::class);
     }
 
     protected static function newFactory(): TimesheetFactory
