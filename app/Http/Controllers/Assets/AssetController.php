@@ -7,6 +7,7 @@ use App\Domain\Assets\Exceptions\AssetDomainException;
 use App\Domain\Assets\Models\Asset;
 use App\Domain\Assets\Models\AssetIncident;
 use App\Domain\Assets\Models\CustodyTransaction;
+use App\Domain\Assets\Models\Maintenance;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Services\PortableSearch;
 use App\Http\Controllers\Controller;
@@ -14,6 +15,7 @@ use App\Http\Requests\Assets\StoreAssetRequest;
 use App\Http\Resources\Assets\AssetIncidentResource;
 use App\Http\Resources\Assets\AssetResource;
 use App\Http\Resources\Assets\CustodyTransactionResource;
+use App\Http\Resources\Assets\MaintenanceResource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -107,17 +109,49 @@ class AssetController extends Controller
             ->orderByDesc('occurred_at')
             ->get();
 
+        $maintenanceRecords = Maintenance::query()
+            ->where('asset_id', $asset->id)
+            ->orderByDesc('created_at')
+            ->get();
+
         return Inertia::render('Assets/Show', [
             'asset' => (new AssetResource($asset))->resolve(),
             'activeTransaction' => $activeTransaction === null ? null : (new CustodyTransactionResource($activeTransaction))->resolve(),
             'custodyHistory' => CustodyTransactionResource::collection($custodyHistory)->resolve(),
             'incidents' => AssetIncidentResource::collection($incidents)->resolve(),
+            'maintenanceRecords' => MaintenanceResource::collection($maintenanceRecords)->resolve(),
             'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
             'can' => [
                 'manageCustody' => $request->user()?->can('assets.custody.manage') ?? false,
                 'reportIncident' => $request->user()?->can('report', AssetIncident::class) ?? false,
                 'decideIncident' => $request->user()?->can('assets.incidents.decide') ?? false,
+                'manageMaintenance' => $request->user()?->can('create', Maintenance::class) ?? false,
             ],
         ]);
+    }
+
+    /**
+     * REQ-AST-02: resolves a scanned QR token to its asset's real Show page
+     * — the token itself grants no access (spec's own explicit rule); the
+     * real `AssetPolicy::view` check runs here exactly as it would for any
+     * other route reaching this asset. A physical asset's printed QR code
+     * encodes this route's own full URL directly (`/assets/qr/{token}`), so
+     * "scanning" is a plain camera-app QR-to-URL open on any modern phone —
+     * no in-app QR-decoding library is needed or was added (this codebase's
+     * established preference for building a primitive directly over adding
+     * a dependency, e.g. DEC-047's identical reasoning for offlineQueue).
+     * An unknown token and a token the caller cannot view both 404
+     * identically — never a 403, which would itself confirm the token was
+     * real to an unauthorized prober.
+     */
+    public function scanQr(Request $request, string $qrToken): RedirectResponse
+    {
+        $asset = Asset::query()->where('qr_token', $qrToken)->first();
+
+        if ($asset === null || $request->user()?->cannot('view', $asset)) {
+            abort(404);
+        }
+
+        return Redirect::route('assets.show', $asset);
     }
 }

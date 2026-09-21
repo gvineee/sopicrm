@@ -2,6 +2,24 @@
 
 Live checkpoint file. Update after every bounded task per `docs/claude-overnight-goal.md`'s execution loop. Newest entry on top.
 
+## Completed: Assets QR-scan + Maintenance scheduling (closes REQ-AST-02/07)
+
+**Status:** done, verified. Closes the last two real gaps `implementation-plan.md`'s own status audit found.
+
+**QR-scan (REQ-AST-02):** `GET /assets/qr/{token}` — always re-runs `AssetPolicy::view` before redirecting; unknown token and unauthorized-viewer both 404 identically (never 403). No QR-decoding library added — the physical QR code encodes this route's full URL, so a phone's native camera app handles "scanning" with zero extra frontend code.
+
+**Maintenance (REQ-AST-07):** `ScheduleMaintenanceAction` (record only, never flips `condition`) / `CompleteMaintenanceAction` (sets completion fields, restores `condition` to `good` only when the asset is currently `under_repair`). New `MaintenancePolicy` reuses `assets.assets.manage`.
+
+**Real bug found:** `Maintenance` model had no `$table` override, so Eloquent guessed `maintenances` while the real migration created a singular `maintenance` table — completely latent until this pass wrote the first real queries against it. Fixed with an explicit `$table` property.
+
+**Files:** new `app/Domain/Assets/Actions/{ScheduleMaintenanceAction,CompleteMaintenanceAction}.php`, `app/Policies/MaintenancePolicy.php`, `app/Http/Controllers/Assets/MaintenanceController.php`, `app/Http/Requests/Assets/{ScheduleMaintenanceRequest,CompleteMaintenanceRequest}.php`, `app/Http/Resources/Assets/MaintenanceResource.php`; `AssetController.php` (+`scanQr()`), `Maintenance.php` (table fix), `AssetsModuleServiceProvider.php`, `web-assets.php` (+3 routes), `Assets/Show.vue`; new `tests/Feature/Assets/{QrScanResolutionTest,MaintenanceSchedulingTest}.php` (9 tests); `implementation-plan.md` (2 rows → done).
+
+**Tests/gates:** `php artisan test --compact` → 295 passed / 3 skipped (1441 assertions). `phpstan` → 0 errors. `pint --dirty` → clean. `npm run types:check`/`build` → passed.
+
+**Next:** genuinely nothing else buildable remains — only BIO-03/BIO-04 (real BioStar API access), OPS-01 live-hosting execution (real hosting decision), and PWA-01 real-device acceptance (physical phone) are open, all correctly `blocked` for a real external reason, not silently skipped.
+
+---
+
 ## Completed: implementation-plan.md status refresh (OPS-01)
 
 **Status:** done. Documentation-only — `docs/implementation-plan.md`'s master backlog Status column was stale (every P0/P1 row still said `not-started`, unchanged since Foundation scaffold, despite this session alone closing roughly 20 real tickets across Auth/RBAC, Companies, Devices, Employees, Contractors, Attendance, Payroll, Timesheets+PDF+email, Projects/Tasks+Kanban+Calendar, DailyJournal, Assets+Stocktake, Notifications+Telegram, and PWA offline sync).

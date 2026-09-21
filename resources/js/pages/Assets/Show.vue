@@ -36,6 +36,16 @@ type Incident = {
     decided_at: string | null;
     version: number;
 };
+type MaintenanceRecord = {
+    id: string;
+    asset_id: string;
+    vendor: string | null;
+    scheduled_at: string | null;
+    completed_at: string | null;
+    actual_cost: number | null;
+    next_service_due_at: string | null;
+    notes: string | null;
+};
 type Asset = {
     id: string;
     name: string;
@@ -55,8 +65,9 @@ const props = defineProps<{
     activeTransaction: CustodyTransaction | null;
     custodyHistory: CustodyTransaction[];
     incidents: Incident[];
+    maintenanceRecords: MaintenanceRecord[];
     employees: Employee[];
-    can: { manageCustody: boolean; reportIncident: boolean; decideIncident: boolean };
+    can: { manageCustody: boolean; reportIncident: boolean; decideIncident: boolean; manageMaintenance: boolean };
 }>();
 
 defineOptions({ layout: { mobileTitle: 'აქტივი' } });
@@ -75,6 +86,7 @@ const showIssueForm = ref(false);
 const showTransferForm = ref(false);
 const showReturnForm = ref(false);
 const showIncidentForm = ref(false);
+const showMaintenanceForm = ref(false);
 
 const issueForm = useForm({
     receiving_employee_id: '',
@@ -138,6 +150,26 @@ function decisionForm(incident: Incident) {
 }
 function submitDecision(incident: Incident) {
     decisionForm(incident).post(`/assets/incidents/${incident.id}/decide`, { preserveScroll: true });
+}
+
+const maintenanceForm = useForm({
+    vendor: '',
+    scheduled_at: '',
+    notes: '',
+});
+function submitMaintenance() {
+    maintenanceForm.post(`/assets/${props.asset.id}/maintenance`, { preserveScroll: true, onSuccess: () => (showMaintenanceForm.value = false) });
+}
+
+const completeForms = new Map<string, ReturnType<typeof useForm>>();
+function completeForm(record: MaintenanceRecord) {
+    if (!completeForms.has(record.id)) {
+        completeForms.set(record.id, useForm({ actual_cost: '', next_service_due_at: '' }));
+    }
+    return completeForms.get(record.id)!;
+}
+function submitComplete(record: MaintenanceRecord) {
+    completeForm(record).post(`/assets/maintenance/${record.id}/complete`, { preserveScroll: true });
 }
 </script>
 
@@ -337,6 +369,58 @@ function submitDecision(incident: Incident) {
                         </select>
                         <Input v-model="decisionForm(incident).reason" placeholder="მიზეზი" class="max-w-xs" />
                         <Button type="submit" size="sm" :disabled="decisionForm(incident).processing">გადაწყვეტილება</Button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Maintenance -->
+        <section class="border-border bg-card rounded-xl border p-5">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="font-semibold">მომსახურება</h2>
+                <Button v-if="can.manageMaintenance" variant="outline" size="sm" @click="showMaintenanceForm = !showMaintenanceForm">
+                    მომსახურების დაგეგმვა
+                </Button>
+            </div>
+
+            <form v-if="showMaintenanceForm" class="mb-4 grid gap-3 border-b pb-4" @submit.prevent="submitMaintenance">
+                <div class="grid gap-2">
+                    <Label for="maintenance-vendor">მომწოდებელი</Label>
+                    <Input id="maintenance-vendor" v-model="maintenanceForm.vendor" />
+                </div>
+                <div class="grid gap-2">
+                    <Label for="maintenance-scheduled">დაგეგმილი თარიღი</Label>
+                    <Input id="maintenance-scheduled" v-model="maintenanceForm.scheduled_at" type="datetime-local" />
+                </div>
+                <div class="grid gap-2">
+                    <Label for="maintenance-notes">შენიშვნა</Label>
+                    <Textarea id="maintenance-notes" v-model="maintenanceForm.notes" />
+                </div>
+                <div class="flex gap-2">
+                    <Button type="submit" :disabled="maintenanceForm.processing">დაგეგმვა</Button>
+                    <Button type="button" variant="ghost" @click="showMaintenanceForm = false">გაუქმება</Button>
+                </div>
+            </form>
+
+            <EmptyState v-if="maintenanceRecords.length === 0" title="მომსახურება არ დაგეგმილა" />
+            <div v-else class="divide-border divide-y">
+                <div v-for="record in maintenanceRecords" :key="record.id" class="py-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium">{{ record.vendor ?? 'მომწოდებელი მითითებული არ არის' }}</span>
+                        <StatusBadge v-if="record.completed_at" label="დასრულებული" tone="success" />
+                        <StatusBadge v-else label="დაგეგმილი" tone="warning" />
+                    </div>
+                    <p v-if="record.scheduled_at" class="text-muted-foreground text-xs">დაგეგმილი: {{ record.scheduled_at.slice(0, 10) }}</p>
+                    <p v-if="record.notes" class="text-muted-foreground text-sm">{{ record.notes }}</p>
+
+                    <form
+                        v-if="!record.completed_at && can.manageMaintenance"
+                        class="mt-2 flex flex-wrap items-end gap-2"
+                        @submit.prevent="submitComplete(record)"
+                    >
+                        <Input v-model="completeForm(record).actual_cost" type="number" min="0" step="0.01" placeholder="ფაქტობრივი ღირებულება" class="max-w-[10rem]" />
+                        <Input v-model="completeForm(record).next_service_due_at" type="datetime-local" class="max-w-[14rem]" />
+                        <Button type="submit" size="sm" :disabled="completeForm(record).processing">დასრულებულად მონიშვნა</Button>
                     </form>
                 </div>
             </div>

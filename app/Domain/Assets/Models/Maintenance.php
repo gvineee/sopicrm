@@ -9,14 +9,28 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "maintenance".
+ */
+/**
+ * @property Carbon|null $scheduled_at
+ * @property Carbon|null $completed_at
+ * @property Carbon|null $next_service_due_at
  */
 class Maintenance extends Model
 {
     /** @use HasFactory<MaintenanceFactory> */
     use BelongsToOrganization, HasFactory, HasUuids, HasVersion;
+
+    // The real migration (2026_09_16_090190_create_assets_domain_tables.php)
+    // creates a SINGULAR `maintenance` table — "maintenance" is a mass noun
+    // Eloquent's default pluralizer otherwise guesses as `maintenances`,
+    // which doesn't exist. This was a real, previously-latent bug: the
+    // table had zero rows/queries against it anywhere until this pass
+    // wired the first real Actions that actually write to it.
+    protected $table = 'maintenance';
 
     public $incrementing = false;
 
