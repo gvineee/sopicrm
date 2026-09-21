@@ -13,6 +13,7 @@
  */
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MyDayController;
 use App\Http\Controllers\MyProfileController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,15 @@ use Illuminate\Support\Facades\Route;
 // this product — root now redirects straight to the app (dashboard when
 // authenticated, login otherwise) instead of showing Laravel boilerplate.
 Route::get('/', fn () => auth()->check() ? to_route('dashboard') : to_route('login'))->name('home');
+
+// OPS-01: /health is a cheap, public liveness probe (no auth middleware —
+// an external load balancer/uptime checker hits this directly). /ready is
+// deliberately NOT wrapped in 'auth' middleware either — HealthController::ready()
+// does its own is_platform_admin check and returns a clean JSON 403 for
+// anyone else, rather than redirecting an API-style caller to an HTML login
+// page the way 'auth' middleware would.
+Route::get('health', [HealthController::class, 'health'])->name('health');
+Route::get('ready', [HealthController::class, 'ready'])->name('ready');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Real Projects/Tasks-backed dashboard — see App\Http\Controllers\DashboardController.
