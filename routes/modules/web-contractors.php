@@ -36,6 +36,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('/', [ContractorActController::class, 'store'])->name('store');
         Route::post('/{act}/accept', [ContractorActController::class, 'accept'])->name('accept');
         Route::post('/{act}/return', [ContractorActController::class, 'returnAct'])->name('return');
+        Route::get('/{act}/attachments/{attachment}', [ContractorActController::class, 'showAttachment'])->name('attachments.show');
     });
 
     Route::post('contractors/{contractor}/attachments', [ContractorActController::class, 'uploadAttachment'])->name('contractors.attachments.store');

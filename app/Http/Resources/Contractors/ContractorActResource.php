@@ -28,9 +28,27 @@ class ContractorActResource extends JsonResource
             'submitted_by' => $this->whenLoaded('submittedBy', fn () => $this->submittedBy?->only(['id', 'name'])),
             'description' => $this->description,
             'quantity' => $this->quantity,
+            // FILES-01 (deferred remainder): a real, protected preview URL
+            // per attachment — omitted entirely for anything not
+            // `available`, matching TaskDetailResource::attachmentShape()'s
+            // exact rule. Before this, evidence metadata was exposed with
+            // no way to actually open the file.
             'evidence' => Attachment::query()
                 ->whereIn('id', $this->evidence_attachment_ids ?? [])
                 ->get(['id', 'original_filename', 'mime_type', 'status'])
+                ->map(fn (Attachment $attachment) => [
+                    'id' => $attachment->id,
+                    'original_filename' => $attachment->original_filename,
+                    'mime_type' => $attachment->mime_type,
+                    'status' => $attachment->status,
+                    'url' => $attachment->status === 'available'
+                        ? route('contractors.acts.attachments.show', [
+                            'contractor' => $this->contractor_id,
+                            'act' => $this->id,
+                            'attachment' => $attachment->id,
+                        ])
+                        : null,
+                ])
                 ->values(),
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'status' => $this->status,

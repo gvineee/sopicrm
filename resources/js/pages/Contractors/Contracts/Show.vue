@@ -31,7 +31,7 @@ type Act = {
     project_id: string;
     description: string | null;
     quantity: string | null;
-    evidence: Array<{ id: string; original_filename: string; status: string }>;
+    evidence: Array<{ id: string; original_filename: string; mime_type: string | null; status: string; url: string | null }>;
     submitted_at: string | null;
     status: 'pending_review' | 'accepted' | 'returned';
     returned_reason: string | null;
@@ -208,6 +208,26 @@ const ACT_STATUS_TONE: Record<Act['status'], 'warning' | 'success' | 'destructiv
                             </p>
                         </div>
                         <StatusBadge :label="ACT_STATUS_LABEL[act.status]" :tone="ACT_STATUS_TONE[act.status]" />
+                    </div>
+
+                    <div v-if="act.evidence.length" class="grid gap-2 sm:grid-cols-2">
+                        <a
+                            v-for="file in act.evidence"
+                            :key="file.id"
+                            :href="file.url ?? undefined"
+                            target="_blank"
+                            rel="noopener"
+                            class="border-border hover:bg-accent flex items-center gap-3 rounded-lg border p-2 text-sm"
+                            :class="!file.url && 'pointer-events-none opacity-60'"
+                        >
+                            <img
+                                v-if="file.url && file.mime_type?.startsWith('image/')"
+                                :src="file.url"
+                                :alt="file.original_filename"
+                                class="size-10 shrink-0 rounded object-cover"
+                            />
+                            <span class="min-w-0 flex-1 truncate">{{ file.original_filename }}</span>
+                        </a>
                     </div>
 
                     <p v-if="act.acceptance" class="text-muted-foreground text-sm">

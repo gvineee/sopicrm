@@ -20,7 +20,10 @@ use Illuminate\Support\Carbon;
  * Accepting an act never touches the referenced Task's own status/quantity —
  * this is a parallel, contractor-billing-only artifact (see plan Context).
  */
-/** @property Carbon|null $submitted_at */
+/**
+ * @property Carbon|null $submitted_at
+ * @property list<string> $evidence_attachment_ids
+ */
 class ContractorAct extends Model
 {
     use BelongsToOrganization, HasUuids, HasVersion;
