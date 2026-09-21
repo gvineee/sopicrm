@@ -5,6 +5,7 @@ namespace App\Domain\Projects\Actions;
 use App\Domain\Auth\Models\ProjectMembership;
 use App\Domain\Projects\Models\Project;
 use App\Domain\Shared\Services\AuditLogger;
+use App\Domain\Shared\Services\CurrentOrganization;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -23,10 +24,18 @@ class CreateProjectAction
      */
     public function execute(array $data, User $actor): Project
     {
+        CurrentOrganization::set(filled($actor->current_organization_id)
+            ? $actor->current_organization_id
+            : $actor->organization_id);
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::statement("select set_config('app.current_org_id', ?, false)", [CurrentOrganization::requireId()]);
+        }
+
         return DB::transaction(function () use ($data, $actor): Project {
             $project = Project::create([
                 'name' => $data['name'],
                 'code' => $data['code'],
+                'company_id' => $data['company_id'] ?? null,
                 'client_id' => $data['client_id'] ?? null,
                 'manager_user_id' => $data['manager_user_id'],
                 'address' => $data['address'] ?? null,

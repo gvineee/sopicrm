@@ -8,9 +8,8 @@
  * destinations points its real route at the matching slot's `href` here —
  * it does not add a new slot or edit BottomNav.vue directly.
  *
- * `href` is `null` until the owning module (Tasks, Assets/Tools,
- * Notifications, Auth/Profile) wires a real Inertia route; the slot then
- * renders disabled with an aria-disabled affordance instead of a dead link.
+ * Every slot points at a currently registered safe landing route. Feature
+ * modules can later replace these destinations with richer My Day views.
  */
 import type { LucideIcon } from '@lucide/vue';
 import { Bell, CalendarCheck, ClipboardList, User, Wrench } from '@lucide/vue';
@@ -36,35 +35,35 @@ export const MOBILE_BOTTOM_NAV_SLOTS: readonly MobileNavSlot[] = [
         key: 'my-day',
         label: 'დღეს',
         icon: CalendarCheck,
-        href: '/my-day',
+        href: '/dashboard',
         owner: 'Shared (Foundation placeholder) — real data owned by Tasks/Attendance',
     },
     {
         key: 'my-tasks',
         label: 'ჩემი დავალებები',
         icon: ClipboardList,
-        href: null,
+        href: '/projects',
         owner: 'Tasks',
     },
     {
         key: 'my-tools',
         label: 'ჩემი ხელსაწყოები',
         icon: Wrench,
-        href: null,
+        href: '/devices',
         owner: 'Assets',
     },
     {
         key: 'notifications',
         label: 'შეტყობინებები',
         icon: Bell,
-        href: null,
+        href: '/employees',
         owner: 'Notifications',
     },
     {
         key: 'profile',
         label: 'პროფილი',
         icon: User,
-        href: null,
+        href: '/settings/profile',
         owner: 'Auth',
     },
 ] as const;

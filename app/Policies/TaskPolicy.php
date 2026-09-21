@@ -8,6 +8,7 @@ use App\Domain\Projects\Models\Project;
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskAssignee;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Spec section 3 role table applied to Tasks: PM/owner get project-wide
@@ -160,6 +161,48 @@ class TaskPolicy
         }
 
         return $this->hasProjectAccess($user, $task->project, 'tasks.tasks.reopen');
+    }
+
+    /**
+     * SQL-level counterpart to `isPerformer()`, for a *list* of tasks
+     * instead of one already-loaded row (audit finding FIX-02/A3,
+     * 2026-09-21: `DashboardController` showed every task in a visible
+     * project's title to any project member, even one with no
+     * `tasks.tasks.view` permission and no performer relationship to that
+     * specific task — exactly what `view()`/`isPerformer()` would deny them
+     * on the task's own page). Callers apply this only when the user lacks
+     * project-wide `tasks.tasks.view`; keep the two methods' conditions in
+     * sync — they express the same rule.
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    public function scopeVisibleToPerformer(Builder $query, User $user): Builder
+    {
+        $employee = $this->employeeOf($user);
+
+        if ($employee === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $teamIds = collect([$employee->team_id])->filter()->values();
+
+        if ($user->hasRole('foreman')) {
+            $teamIds = $teamIds->merge(
+                Team::query()->where('foreman_employee_id', $employee->id)->pluck('id')
+            );
+        }
+
+        return $query->where(function (Builder $q) use ($employee, $teamIds): void {
+            $q->where('accountable_owner_employee_id', $employee->id)
+                ->orWhereHas('assignees', function (Builder $assignees) use ($employee, $teamIds): void {
+                    $assignees->where('employee_id', $employee->id);
+
+                    if ($teamIds->isNotEmpty()) {
+                        $assignees->orWhereIn('team_id', $teamIds);
+                    }
+                });
+        });
     }
 
     private function isPerformer(User $user, Task $task): bool

@@ -28,6 +28,10 @@ class StoreProjectRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
+            'company_id' => [
+                'nullable', 'uuid',
+                Rule::exists('companies', 'id')->where('organization_id', $organizationId),
+            ],
             'code' => [
                 'required', 'string', 'max:50',
                 Rule::unique('projects', 'code')->where('organization_id', $organizationId),

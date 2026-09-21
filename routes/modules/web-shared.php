@@ -12,17 +12,28 @@
  * must NOT add routes here. See docs/architecture.md §3.1.
  */
 
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MyDayController;
+use App\Http\Controllers\MyProfileController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
+// The starter kit's default "Welcome" marketing page is not a real screen of
+// this product — root now redirects straight to the app (dashboard when
+// authenticated, login otherwise) instead of showing Laravel boilerplate.
+Route::get('/', fn () => auth()->check() ? to_route('dashboard') : to_route('login'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    // Real Projects/Tasks-backed dashboard — see App\Http\Controllers\DashboardController.
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Reserved mobile bottom-nav slot "დღეს" (lib/mobileNav.ts). Placeholder
-    // composition owned by Shared/Foundation until Tasks/Attendance wire
-    // real data in — see docs/decisions.md DEC-050.
-    Route::inertia('my-day', 'MyDay')->name('my-day');
+    // Every user's own work profile — see App\Http\Controllers\MyProfileController's
+    // docblock for why it is deliberately never permission-gated beyond auth.
+    Route::get('me/profile', [MyProfileController::class, 'show'])->name('me.profile');
+
+    // Reserved mobile bottom-nav slot "დღეს" (lib/mobileNav.ts). WORKER-01:
+    // real Tasks-backed data via App\Http\Controllers\MyDayController — the
+    // static placeholder (docs/decisions.md DEC-050) is retired.
+    Route::get('my-day', [MyDayController::class, 'index'])->name('my-day');
 });
 
 if (app()->environment(['local', 'testing'])) {

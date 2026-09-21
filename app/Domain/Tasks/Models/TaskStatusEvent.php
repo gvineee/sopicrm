@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * database/migrations/2026_09_17_110000_add_tasks_workflow_extensions.php
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * (via each transition Action), never constructed ad hoc, so every
  * transition is guaranteed to leave a trail.
  */
+/** @property Carbon|null $occurred_at */
 class TaskStatusEvent extends Model
 {
     use BelongsToOrganization, HasUuids;

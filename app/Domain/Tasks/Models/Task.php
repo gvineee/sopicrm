@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "tasks" (spec section 10). Exactly one accountable
@@ -26,7 +27,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * Action), not a blind DB CHECK here, since acceptance is cumulative across
  * possibly multiple submissions.
  */
-/** @property numeric-string|null $planned_quantity */
+/**
+ * @property numeric-string|null $planned_quantity
+ * @property Carbon|null $due_at
+ */
 class Task extends Model
 {
     /** @use HasFactory<TaskFactory> */

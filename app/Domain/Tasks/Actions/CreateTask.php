@@ -28,6 +28,12 @@ class CreateTask
     {
         return DB::transaction(function () use ($data, $actor) {
             $task = Task::create([
+                // Explicit rather than relying on the DB column default:
+                // Eloquent does not re-fetch an unfilled default column after
+                // INSERT, so `$task->status` below would otherwise read as
+                // null in-memory even though the row itself defaults to
+                // 'draft' — this is exactly that value, made real.
+                'status' => 'draft',
                 'project_id' => $data['project_id'],
                 'project_location_id' => $data['project_location_id'] ?? null,
                 'work_package_id' => $data['work_package_id'] ?? null,

@@ -23,6 +23,15 @@ defineProps<{
     status?: string;
     canResetPassword: boolean;
 }>();
+
+function handleLoginSuccess() {
+    // Fortify authenticates through a normal redirect. Inertia normally
+    // follows it, but some tunnel/proxy combinations return the redirect as
+    // a successful form response and leave the login page mounted. Explicitly
+    // visit the authenticated landing page so the fresh session and shared
+    // navigation props are loaded without requiring Ctrl+R.
+    window.location.assign('/dashboard');
+}
 </script>
 
 <template>
@@ -40,6 +49,7 @@ defineProps<{
     <Form
         v-bind="store.form()"
         :reset-on-success="['password']"
+        @success="handleLoginSuccess"
         v-slot="{ errors, processing }"
         class="flex flex-col gap-6"
     >

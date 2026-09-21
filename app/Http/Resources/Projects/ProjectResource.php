@@ -24,6 +24,7 @@ class ProjectResource extends JsonResource
             'id' => $this->id,
             'code' => $this->code,
             'name' => $this->name,
+            'company_id' => $this->company_id,
             'status' => $this->status,
             'address' => $this->address,
             'starts_on' => $this->starts_on?->toDateString(),
@@ -39,6 +40,10 @@ class ProjectResource extends JsonResource
             'client' => $this->whenLoaded('client', fn () => [
                 'id' => $this->client->id,
                 'name' => $this->client->name,
+            ]),
+            'company' => $this->whenLoaded('company', fn () => $this->company === null ? null : [
+                'id' => $this->company->id,
+                'name' => $this->company->name,
             ]),
             'manager' => $this->whenLoaded('manager', fn () => [
                 'id' => $this->manager->id,

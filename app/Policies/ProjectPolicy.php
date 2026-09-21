@@ -33,10 +33,23 @@ class ProjectPolicy
      * `whereHas('memberships', ...)`, not by this ability gating a single
      * model, but `viewAny` still gates whether the "all projects" view
      * (rather than "my projects") is offered at all.
+     *
+     * Deliberately does NOT fall back to `projects.view` (audit finding
+     * FIX-02/A2, 2026-09-21): `projects.view` is the PER-PROJECT permission
+     * `view()` below pairs with an active membership check — `project_manager`
+     * holds it precisely so they can open a project they belong to. Treating
+     * that same permission as sufficient for org-wide `viewAny` made
+     * `ProjectController::index()`'s own membership filter a no-op for any
+     * role holding `projects.view` (i.e. every project_manager), so they saw
+     * every project in the organization's list/search/KPIs regardless of
+     * membership. Org-wide list access requires the owner/system_admin role
+     * or the distinct `projects.viewAny` permission only.
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('owner') && $user->can('projects.viewAny');
+        return $user->hasRole('owner')
+            || $user->hasRole('system_admin')
+            || $user->can('projects.viewAny');
     }
 
     public function view(User $user, Project $project): bool
@@ -54,7 +67,9 @@ class ProjectPolicy
 
     public function create(User $user): bool
     {
-        return $user->can('projects.create');
+        return $user->hasRole('owner')
+            || $user->hasRole('system_admin')
+            || $user->can('projects.create');
     }
 
     public function update(User $user, Project $project): bool
@@ -63,7 +78,9 @@ class ProjectPolicy
             return false;
         }
 
-        if (! $user->can('projects.update')) {
+        if (! $user->hasRole('owner')
+            && ! $user->hasRole('system_admin')
+            && ! $user->can('projects.update')) {
             return false;
         }
 
@@ -80,12 +97,18 @@ class ProjectPolicy
             return false;
         }
 
-        return $user->can('projects.delete') && $user->hasRole('owner');
+        // Owner always has it; the permission check is a real, independent
+        // path (not a redundant re-check of the same role) so a future role
+        // explicitly granted `projects.delete` actually gets it — today only
+        // `owner` holds that permission (ProjectsPermissionsSeeder), so
+        // behavior is unchanged.
+        return $user->hasRole('owner') || $user->can('projects.delete');
     }
 
     public function changeStatus(User $user, Project $project): bool
     {
-        return $this->update($user, $project) && $user->can('projects.status.change');
+        return $this->update($user, $project)
+            && ($user->hasRole('owner') || $user->can('projects.status.change'));
     }
 
     public function manageMemberships(User $user, Project $project): bool
@@ -94,7 +117,7 @@ class ProjectPolicy
             return false;
         }
 
-        if (! $user->can('projects.memberships.manage')) {
+        if (! $user->hasRole('owner') && ! $user->can('projects.memberships.manage')) {
             return false;
         }
 
@@ -111,7 +134,7 @@ class ProjectPolicy
             return false;
         }
 
-        if (! $user->can('projects.wbs.manage')) {
+        if (! $user->hasRole('owner') && ! $user->can('projects.wbs.manage')) {
             return false;
         }
 
@@ -128,7 +151,7 @@ class ProjectPolicy
             return false;
         }
 
-        if (! $user->can('projects.documents.manage')) {
+        if (! $user->hasRole('owner') && ! $user->can('projects.documents.manage')) {
             return false;
         }
 

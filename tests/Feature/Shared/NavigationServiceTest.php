@@ -30,12 +30,12 @@ test('an authenticated user sees the shared dashboard entry under its Georgian g
 
     $groups = app(NavigationService::class)->groupsForUser($user);
 
-    expect($groups)->toContain([
-        'group' => 'მიმოხილვა',
-        'items' => [
+    $overviewGroup = collect($groups)->firstWhere('group', 'მიმოხილვა');
+
+    expect($overviewGroup)->not->toBeNull()
+        ->and($overviewGroup['items'])->toContain(
             ['label' => 'დეშბორდი', 'icon' => 'layout-grid', 'href' => route('dashboard')],
-        ],
-    ]);
+        );
 });
 
 test('a guest (no authenticated user) sees no nav entries', function () {

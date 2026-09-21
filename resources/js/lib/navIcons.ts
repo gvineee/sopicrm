@@ -10,12 +10,43 @@
  * inventing a per-module icon-resolution mechanism.
  */
 import type { LucideIcon } from '@lucide/vue';
-import { HelpCircle, LayoutGrid, Users, UsersRound } from '@lucide/vue';
+import {
+    AlertTriangle,
+    Banknote,
+    Building2,
+    CalendarClock,
+    CalendarRange,
+    ClipboardList,
+    Clock,
+    Cpu,
+    FileEdit,
+    HandCoins,
+    Handshake,
+    HelpCircle,
+    IdCard,
+    LayoutGrid,
+    ShieldQuestion,
+    Users,
+    UsersRound,
+} from '@lucide/vue';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
     'layout-grid': LayoutGrid,
     users: Users,
     'users-round': UsersRound,
+    cpu: Cpu,
+    'id-card': IdCard,
+    'building-2': Building2,
+    handshake: Handshake,
+    clock: Clock,
+    'alert-triangle': AlertTriangle,
+    'calendar-clock': CalendarClock,
+    'clipboard-list': ClipboardList,
+    'file-edit': FileEdit,
+    'calendar-range': CalendarRange,
+    banknote: Banknote,
+    'hand-coins': HandCoins,
+    'shield-question': ShieldQuestion,
 };
 
 /** Falls back to a generic icon rather than throwing on an unknown key. */

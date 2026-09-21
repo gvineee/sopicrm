@@ -43,7 +43,7 @@ class UploadTaskAttachment
         ?float $gpsLongitude,
         bool $gpsConsentGiven,
     ): Attachment {
-        $config = config('modules.tasks.attachments');
+        $config = config('tasks.attachments');
         $mime = $file->getMimeType() ?? $file->getClientMimeType();
         $isPdf = $mime === 'application/pdf';
         $maxBytes = ($isPdf ? $config['max_pdf_mb'] : $config['max_photo_mb']) * 1024 * 1024;

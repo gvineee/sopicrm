@@ -32,13 +32,14 @@ class UpdateProjectAction
             }
 
             [$before] = [$project->only([
-                'name', 'code', 'client_id', 'manager_user_id', 'address',
+                'name', 'code', 'company_id', 'client_id', 'manager_user_id', 'address',
                 'starts_on', 'ends_on', 'budget_baseline',
             ])];
 
             $project->fill([
                 'name' => $data['name'] ?? $project->name,
                 'code' => $data['code'] ?? $project->code,
+                'company_id' => array_key_exists('company_id', $data) ? $data['company_id'] : $project->company_id,
                 'client_id' => array_key_exists('client_id', $data) ? $data['client_id'] : $project->client_id,
                 'manager_user_id' => $data['manager_user_id'] ?? $project->manager_user_id,
                 'address' => array_key_exists('address', $data) ? $data['address'] : $project->address,

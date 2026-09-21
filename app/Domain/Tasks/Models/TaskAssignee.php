@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tasks\Models;
 
+use App\Domain\Contractors\Models\Contractor;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Employees\Models\Team;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
@@ -29,6 +30,7 @@ class TaskAssignee extends Model
         'task_id',
         'employee_id',
         'team_id',
+        'contractor_id',
     ];
 
     /**
@@ -53,6 +55,14 @@ class TaskAssignee extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * @return BelongsTo<Contractor, $this>
+     */
+    public function contractor(): BelongsTo
+    {
+        return $this->belongsTo(Contractor::class);
     }
 
     protected static function newFactory(): TaskAssigneeFactory

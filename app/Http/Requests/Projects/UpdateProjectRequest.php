@@ -21,6 +21,10 @@ class UpdateProjectRequest extends FormRequest
         $project = $this->route('project');
 
         return [
+            'company_id' => [
+                'sometimes', 'required', 'uuid',
+                Rule::exists('companies', 'id')->where('organization_id', $organizationId),
+            ],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'code' => [
                 'sometimes', 'required', 'string', 'max:50',

@@ -31,9 +31,14 @@ class ProjectDetailResource extends JsonResource
             'budget_baseline' => $user->can('viewBudget', $this->resource) ? $this->budget_baseline : null,
             'budget_baseline_visible' => $user->can('viewBudget', $this->resource),
             'client_id' => $this->client_id,
+            'company_id' => $this->company_id,
             'client' => $this->whenLoaded('client', fn () => $this->client === null ? null : [
                 'id' => $this->client->id,
                 'name' => $this->client->name,
+            ]),
+            'company' => $this->whenLoaded('company', fn () => $this->company === null ? null : [
+                'id' => $this->company->id,
+                'name' => $this->company->name,
             ]),
             'manager_user_id' => $this->manager_user_id,
             'manager' => $this->whenLoaded('manager', fn () => [

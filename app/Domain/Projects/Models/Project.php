@@ -3,6 +3,7 @@
 namespace App\Domain\Projects\Models;
 
 use App\Domain\Auth\Models\ProjectMembership;
+use App\Domain\Companies\Models\Company;
 use App\Domain\Devices\Models\Site;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
@@ -48,6 +49,7 @@ class Project extends Model
 
     protected $fillable = [
         'organization_id',
+        'company_id',
         'name',
         'code',
         'client_id',
@@ -83,6 +85,12 @@ class Project extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /** @return BelongsTo<Company, $this> */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /**

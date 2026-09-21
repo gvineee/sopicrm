@@ -2,18 +2,27 @@
 
 namespace App\Http\Controllers\Projects;
 
+use App\Domain\Companies\Models\Company;
 use App\Domain\Projects\Actions\CreateProjectAction;
+use App\Domain\Projects\Actions\TransitionProjectStatusAction;
 use App\Domain\Projects\Actions\UpdateProjectAction;
 use App\Domain\Projects\Exceptions\ProjectDomainException;
 use App\Domain\Projects\Models\Client;
 use App\Domain\Projects\Models\Project;
+use App\Domain\Projects\Models\ProjectLocation;
 use App\Domain\Projects\Services\ProjectStatusTransitionService;
 use App\Domain\Shared\Services\AuditLogger;
+use App\Domain\Shared\Services\PortableSearch;
+use App\Domain\Tasks\Models\Task;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Projects\StoreProjectRequest;
+use App\Http\Requests\Projects\TransitionProjectStatusRequest;
 use App\Http\Requests\Projects\UpdateProjectRequest;
 use App\Http\Resources\Projects\ClientResource;
 use App\Http\Resources\Projects\ProjectDetailResource;
+use App\Http\Resources\Projects\ProjectDocumentResource;
+use App\Http\Resources\Projects\ProjectLocationResource;
+use App\Http\Resources\Projects\ProjectMemberResource;
 use App\Http\Resources\Projects\ProjectResource;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -34,9 +43,7 @@ class ProjectController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        abort_unless($user->can('projects.view'), 403);
-
-        $query = Project::query()->with(['client', 'manager'])->withCount('memberships');
+        $query = Project::query()->with(['client', 'manager', 'company'])->withCount('memberships');
 
         // Spec section 3: PM/other non-owner roles only ever see projects
         // they're an active member of — the real access boundary, not just
@@ -49,8 +56,8 @@ class ProjectController extends Controller
 
         if ($search = $request->string('search')->trim()->value()) {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('code', 'ilike', "%{$search}%");
+                PortableSearch::where($q, 'name', "%{$search}%");
+                PortableSearch::orWhere($q, 'code', "%{$search}%");
             });
         }
 
@@ -60,6 +67,10 @@ class ProjectController extends Controller
 
         if ($clientId = $request->string('client_id')->trim()->value()) {
             $query->where('client_id', $clientId);
+        }
+
+        if ($companyId = $request->string('company_id')->trim()->value()) {
+            $query->where('company_id', $companyId);
         }
 
         $sortKey = $request->string('sort')->value() ?: 'name';
@@ -84,12 +95,18 @@ class ProjectController extends Controller
                 'search' => $search ?: '',
                 'status' => $status ?: '',
                 'client_id' => $clientId ?: '',
+                'company_id' => $companyId ?: '',
             ],
             'sort' => ['key' => $sortKey, 'direction' => $direction],
             'clients' => ClientResource::collection(Client::query()->orderBy('name')->get()),
+            'companies' => Company::query()->orderBy('name')->get(['id', 'name', 'code']),
             'can' => [
-                'create' => $user->can('create', Project::class),
-                'view_any' => $user->can('viewAny', Project::class),
+                'create' => $user->hasRole('owner')
+                    || $user->hasRole('system_admin')
+                    || $user->can('create', Project::class),
+                'view_any' => $user->hasRole('owner')
+                    || $user->hasRole('system_admin')
+                    || $user->can('viewAny', Project::class),
             ],
         ]);
     }
@@ -99,6 +116,7 @@ class ProjectController extends Controller
         $this->authorize('create', Project::class);
 
         return Inertia::render('Projects/Create', [
+            'companies' => Company::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'clients' => ClientResource::collection(Client::query()->orderBy('name')->get()),
             'managers' => User::query()
                 ->where('organization_id', $request->user()->organization_id)
@@ -120,11 +138,47 @@ class ProjectController extends Controller
     {
         $this->authorize('view', $project);
 
-        $project->load(['client', 'manager']);
+        $project->load(['client', 'manager', 'company']);
+
+        $canManageMemberships = $request->user()->can('manageMemberships', $project);
+        $canManageWbs = $request->user()->can('manageWbs', $project);
+        $canManageDocuments = $request->user()->can('manageDocuments', $project);
 
         return Inertia::render('Projects/Show', [
             'project' => new ProjectDetailResource($project),
             'statusOptions' => app(ProjectStatusTransitionService::class)->allowedTargets($project->status),
+            'members' => ProjectMemberResource::collection(
+                $project->memberships()->active()->with('user')->orderBy('created_at')->get()
+            ),
+            'availableUsers' => $canManageMemberships
+                ? User::query()->where('organization_id', $request->user()->organization_id)->orderBy('name')->get(['id', 'name', 'email'])
+                : [],
+            // Flat list, not just top-level — the WBS tree can be arbitrarily
+            // deep (spec section 10) and Eloquent's `with('children')` only
+            // loads one level; the Vue page builds the tree client-side from
+            // each row's parent_location_id instead.
+            'locations' => ProjectLocationResource::collection(
+                ProjectLocation::where('project_id', $project->id)->orderBy('name')->get()
+            ),
+            'documents' => ProjectDocumentResource::collection(
+                $project->documents()->with('uploadedBy')->latest()->get()
+            ),
+            'taskStats' => [
+                'by_status' => Task::query()->where('project_id', $project->id)
+                    ->selectRaw('status, count(*) as count')
+                    ->groupBy('status')
+                    ->pluck('count', 'status'),
+                'overdue' => Task::query()->where('project_id', $project->id)
+                    ->whereNotIn('status', ['completed', 'cancelled'])
+                    ->whereNotNull('due_at')
+                    ->where('due_at', '<', now())
+                    ->count(),
+            ],
+            'can' => [
+                'manage_memberships' => $canManageMemberships,
+                'manage_wbs' => $canManageWbs,
+                'manage_documents' => $canManageDocuments,
+            ],
         ]);
     }
 
@@ -136,6 +190,7 @@ class ProjectController extends Controller
 
         return Inertia::render('Projects/Edit', [
             'project' => new ProjectDetailResource($project),
+            'companies' => Company::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'clients' => ClientResource::collection(Client::query()->orderBy('name')->get()),
             'managers' => User::query()
                 ->where('organization_id', $request->user()->organization_id)
@@ -157,6 +212,23 @@ class ProjectController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'ცვლილებები შენახულია.']);
 
         return to_route('projects.show', $project);
+    }
+
+    public function changeStatus(TransitionProjectStatusRequest $request, Project $project, TransitionProjectStatusAction $action): RedirectResponse
+    {
+        try {
+            $action->execute(
+                $project,
+                (string) $request->validated('status'),
+                $request->validated('reason'),
+                $request->validated('version') !== null ? (int) $request->validated('version') : null,
+                $request->user(),
+            );
+        } catch (ProjectDomainException $e) {
+            return back()->withErrors($e->fieldErrors());
+        }
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'პროექტის სტატუსი განახლდა.']);
     }
 
     public function destroy(Request $request, Project $project, AuditLogger $auditLogger): RedirectResponse

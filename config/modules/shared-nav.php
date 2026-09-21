@@ -29,6 +29,12 @@ return [
                 'route' => 'dashboard',
                 'permission' => null,
             ],
+            [
+                'label' => 'ჩემი პროფილი',
+                'icon' => 'id-card',
+                'route' => 'me.profile',
+                'permission' => null,
+            ],
         ],
     ],
 ];
