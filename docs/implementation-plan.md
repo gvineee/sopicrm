@@ -33,31 +33,31 @@ Cross-reference: `docs/architecture.md` (how), `docs/data-model.md` (schema), `d
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-FND-01 | Scaffold Laravel 13 app from the official Vue starter kit (Vue 3 + TS + Inertia + Vite + Tailwind); lock composer/package versions | P0 | not-started |
-| REQ-FND-02 | Repo layout per `docs/architecture.md` § 2 (app/Domain, app/Http, app/Policies, app/Jobs, database/migrations, resources/js, routes, tests, docs, infra, services/device-connector skeleton) | P0 | not-started |
-| REQ-FND-03 | `routes/api.php`/`routes/web.php` bootstrap-loop pattern + `routes/modules/` directory | P0 | not-started |
-| REQ-FND-04 | `organizations` table + global `BelongsToOrganization` Eloquent scope, deriving tenant id only from authenticated session/token | P0 | not-started |
-| REQ-FND-05 | Postgres RLS policies on all business tables + dedicated non-superuser runtime DB role (`oda_app`) + `SET LOCAL app.current_org_id` middleware | P0 | not-started |
-| REQ-FND-06 | RLS integration test suite connecting as the real restricted runtime role (not superuser) proving cross-tenant isolation | P0 | not-started |
-| REQ-FND-07 | `users`, `roles`, `permissions` + spatie/laravel-permission integration; seed roles from spec section 3 (`RbacBaseSeeder`) | P0 | not-started |
-| REQ-FND-08 | `AggregatingPermissionsSeeder` glob mechanism + documented module load order | P0 | not-started |
-| REQ-FND-09 | Session auth (login/logout, password hashing, CSRF) + rate limiting + login audit + MFA hook for privileged roles | P0 | not-started |
-| REQ-FND-10 | Laravel Sanctum setup for machine/API tokens (device-connector identity) | P0 | not-started |
-| REQ-FND-11 | Base Policy pattern (Policy checks permission AND project-membership where relevant) + example Policy for a P0 model | P0 | not-started |
-| REQ-FND-12 | `NavigationService` + `config/modules/<module>-nav.php` contract + shared nav Vue components (desktop sidebar, mobile bottom-nav, max 5 slots) | P0 | not-started |
-| REQ-FND-13 | ODA design system: typography, spacing, color tokens (warm light bg, graphite text/nav, emerald accent, amber warning), radii, elevation, icons, breakpoints, component states, light+dark via shared tokens, WCAG AA target | P0 | not-started |
-| REQ-FND-14 | Shared design-system Vue primitives: button, input, table shell w/ server-side sort/filter/pagination, modal, toast, KPI tile, loading/empty/error/permission-denied/offline state components | P0 | not-started |
-| REQ-FND-15 | Desktop shell layout: collapsible sidebar, project selector, global search, KPI area, data table + detail drawer pattern, Kanban primitive | P0 | not-started |
-| REQ-FND-16 | Mobile shell layout: bottom nav (≤5 items), "ჩემი დღე" composition, task cards, camera action affordance, bottom sheets | P0 | not-started |
-| REQ-FND-17 | Full P0+P1 data model migrations per `docs/data-model.md` (Access, Employees, Devices, Attendance, Payroll, Assets, Projects/Tasks, shared entities) | P0 | not-started |
-| REQ-FND-18 | `btree_gist` extension + exclusion constraints (rate non-overlap, session non-overlap) | P0 | not-started |
-| REQ-FND-19 | Money/UUID/timestamp/version/audit/outbox/idempotency base conventions implemented as reusable traits/casts/base classes | P0 | not-started |
-| REQ-FND-20 | Installable PWA shell: Web App Manifest (id, name/short_name "ODA CRM", start_url, scope, standalone, theme/bg colors, 192/512 + maskable icons, apple-touch-icon), service worker (app shell + offline fallback, cache versioning, safe update flow) | P0/P1 | not-started |
-| REQ-FND-21 | Android install prompt (`beforeinstallprompt`, feature-detected) + iOS Add-to-Home-Screen guide copy | P1 | not-started |
-| REQ-FND-22 | `infra/docker-compose.yml`: app, worker, scheduler, postgres, redis, minio, mailhog, device-connector | P0 | not-started |
-| REQ-FND-23 | CI pipeline: lint, typecheck, migrations, Pest tests, frontend build | P0 | not-started |
-| REQ-FND-24 | Health/readiness endpoints; worker graceful shutdown | P0 | not-started |
-| REQ-FND-25 | Responsive visual baseline validated at 360/390/768/1440px for: employee "my day", project dashboard, task detail w/ photo, tool issue, attendance timesheet | P0 | not-started |
+| REQ-FND-01 | Scaffold Laravel 13 app from the official Vue starter kit (Vue 3 + TS + Inertia + Vite + Tailwind); lock composer/package versions | P0 | done |
+| REQ-FND-02 | Repo layout per `docs/architecture.md` § 2 (app/Domain, app/Http, app/Policies, app/Jobs, database/migrations, resources/js, routes, tests, docs, infra, services/device-connector skeleton) | P0 | done |
+| REQ-FND-03 | `routes/api.php`/`routes/web.php` bootstrap-loop pattern + `routes/modules/` directory | P0 | done |
+| REQ-FND-04 | `organizations` table + global `BelongsToOrganization` Eloquent scope, deriving tenant id only from authenticated session/token | P0 | done |
+| REQ-FND-05 | Postgres RLS policies on all business tables + dedicated non-superuser runtime DB role (`oda_app`) + `SET LOCAL app.current_org_id` middleware | P0 | done |
+| REQ-FND-06 | RLS integration test suite connecting as the real restricted runtime role (not superuser) proving cross-tenant isolation | P0 | done |
+| REQ-FND-07 | `users`, `roles`, `permissions` + spatie/laravel-permission integration; seed roles from spec section 3 (`RbacBaseSeeder`) | P0 | done |
+| REQ-FND-08 | `AggregatingPermissionsSeeder` glob mechanism + documented module load order | P0 | done |
+| REQ-FND-09 | Session auth (login/logout, password hashing, CSRF) + rate limiting + login audit + MFA hook for privileged roles | P0 | done |
+| REQ-FND-10 | Laravel Sanctum setup for machine/API tokens (device-connector identity) | P0 | done |
+| REQ-FND-11 | Base Policy pattern (Policy checks permission AND project-membership where relevant) + example Policy for a P0 model | P0 | done |
+| REQ-FND-12 | `NavigationService` + `config/modules/<module>-nav.php` contract + shared nav Vue components (desktop sidebar, mobile bottom-nav, max 5 slots) | P0 | done |
+| REQ-FND-13 | ODA design system: typography, spacing, color tokens (warm light bg, graphite text/nav, emerald accent, amber warning), radii, elevation, icons, breakpoints, component states, light+dark via shared tokens, WCAG AA target | P0 | done |
+| REQ-FND-14 | Shared design-system Vue primitives: button, input, table shell w/ server-side sort/filter/pagination, modal, toast, KPI tile, loading/empty/error/permission-denied/offline state components | P0 | done |
+| REQ-FND-15 | Desktop shell layout: collapsible sidebar, project selector, global search, KPI area, data table + detail drawer pattern, Kanban primitive | P0 | done |
+| REQ-FND-16 | Mobile shell layout: bottom nav (≤5 items), "ჩემი დღე" composition, task cards, camera action affordance, bottom sheets | P0 | done |
+| REQ-FND-17 | Full P0+P1 data model migrations per `docs/data-model.md` (Access, Employees, Devices, Attendance, Payroll, Assets, Projects/Tasks, shared entities) | P0 | done |
+| REQ-FND-18 | `btree_gist` extension + exclusion constraints (rate non-overlap, session non-overlap) | P0 | done |
+| REQ-FND-19 | Money/UUID/timestamp/version/audit/outbox/idempotency base conventions implemented as reusable traits/casts/base classes | P0 | done |
+| REQ-FND-20 | Installable PWA shell: Web App Manifest (id, name/short_name "ODA CRM", start_url, scope, standalone, theme/bg colors, 192/512 + maskable icons, apple-touch-icon), service worker (app shell + offline fallback, cache versioning, safe update flow) | P0/P1 | done |
+| REQ-FND-21 | Android install prompt (`beforeinstallprompt`, feature-detected) + iOS Add-to-Home-Screen guide copy | P1 | done |
+| REQ-FND-22 | `infra/docker-compose.yml`: app, worker, scheduler, postgres, redis, minio, mailhog, device-connector | P0 | done (mail catcher is `mailpit`, a documented equivalent substitution for `mailhog`) |
+| REQ-FND-23 | CI pipeline: lint, typecheck, migrations, Pest tests, frontend build | P0 | done |
+| REQ-FND-24 | Health/readiness endpoints; worker graceful shutdown | P0 | done (`/health`+`/ready` real endpoints with tests; graceful shutdown relies on `queue:work`'s own built-in SIGTERM handling, no custom shutdown hook was added) |
+| REQ-FND-25 | Responsive visual baseline validated at 360/390/768/1440px for: employee "my day", project dashboard, task detail w/ photo, tool issue, attendance timesheet | P0 | done (see `docs/decisions.md` DEC-050 for the verification method and 3 real bugs it found/fixed) |
 
 ## REQ-EMP — Employees & Rates (spec §5)
 
@@ -151,71 +151,71 @@ REQ-DEV-16 has passed end-to-end against the simulator, including duplicate outa
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-AST-01 | Asset registration form (individual/kit/quantity/consumable distinction, unique inventory code, initial location, condition, optional brand/model/serial/purchase/warranty/photos/manual/bundle/ownership/calibration-service due) | P1 | not-started |
-| REQ-AST-02 | QR code generation (opaque token) resolving to a Policy-checked asset page; QR possession alone grants no access | P1 | not-started |
-| REQ-AST-03 | Issue form: asset/kit or quantity line items, issuing warehouse, receiving employee, project/site, issue time, expected return, condition, accessories, photo, comment, dual confirmation; draft-savable; final issue requires real available balance + permission | P1 | not-started |
-| REQ-AST-04 | Issue status machine draft → awaiting_receipt → issued → partially_returned/returned; "issued, receipt pending" never shown as available stock | P1 | not-started |
-| REQ-AST-05 | Return form: reference issue, returned items/qty, receiving warehouse, condition, lost accessories, photos, comment, inspector; damaged → quarantine/repair, not available; partial return preserves remaining obligation | P1 | not-started |
-| REQ-AST-06 | Transfer form: source/destination, site, assets, date, condition, both-party confirmation, in_transit intermediate state; direct employee-to-employee keeps full custody chain | P1 | not-started |
-| REQ-AST-07 | Damage/loss/service/write-off form; service record tracks vendor/due/actual cost/next service; write-off requires authorized approval, history retained | P1 | not-started |
-| REQ-AST-08 | Stocktake session: expected snapshot, QR scan, found/short/excess, recount, approved adjustment; scan never directly mutates ledger balance | P1 | not-started |
-| REQ-AST-09 | Concurrency-safe single-issue guarantee (transaction + lock/unique constraint) for simultaneous double-issue attempts | P1 | not-started |
-| REQ-AST-10 | Reports: who-holds-what, overdue returns, per-project allocation, service history, lost assets, full asset history | P1 | not-started |
-| REQ-AST-11 | Employee self-service: confirm receipt, request return, report damage | P1 | not-started |
-| REQ-AST-12 | Assets module Policies (warehouse keeper scope; salary/other-warehouse access separate) | P1 | not-started |
-| REQ-AST-13 | Pest tests matching spec §23 asset rows: two simultaneous issue attempts on same asset → only one transaction succeeds; kit partially returned → correct remaining obligation and item condition | P1 | not-started |
+| REQ-AST-01 | Asset registration form (individual/kit/quantity/consumable distinction, unique inventory code, initial location, condition, optional brand/model/serial/purchase/warranty/photos/manual/bundle/ownership/calibration-service due) | P1 | done |
+| REQ-AST-02 | QR code generation (opaque token) resolving to a Policy-checked asset page; QR possession alone grants no access | P1 | in-progress (`assets.qr_token` column exists and is generated; no route resolves a scanned token to a Policy-checked page yet) |
+| REQ-AST-03 | Issue form: asset/kit or quantity line items, issuing warehouse, receiving employee, project/site, issue time, expected return, condition, accessories, photo, comment, dual confirmation; draft-savable; final issue requires real available balance + permission | P1 | done |
+| REQ-AST-04 | Issue status machine draft → awaiting_receipt → issued → partially_returned/returned; "issued, receipt pending" never shown as available stock | P1 | done |
+| REQ-AST-05 | Return form: reference issue, returned items/qty, receiving warehouse, condition, lost accessories, photos, comment, inspector; damaged → quarantine/repair, not available; partial return preserves remaining obligation | P1 | done |
+| REQ-AST-06 | Transfer form: source/destination, site, assets, date, condition, both-party confirmation, in_transit intermediate state; direct employee-to-employee keeps full custody chain | P1 | done |
+| REQ-AST-07 | Damage/loss/service/write-off form; service record tracks vendor/due/actual cost/next service; write-off requires authorized approval, history retained | P1 | in-progress (damage/loss/write-off via `ReportAssetIncidentAction`/`DecideAssetIncidentAction`, approval-gated, done; standalone `Maintenance` vendor/due-date/cost scheduling UI not built) |
+| REQ-AST-08 | Stocktake session: expected snapshot, QR scan, found/short/excess, recount, approved adjustment; scan never directly mutates ledger balance | P1 | done (real count entry, not an actual QR-scan input — see REQ-AST-02) |
+| REQ-AST-09 | Concurrency-safe single-issue guarantee (transaction + lock/unique constraint) for simultaneous double-issue attempts | P1 | done |
+| REQ-AST-10 | Reports: who-holds-what, overdue returns, per-project allocation, service history, lost assets, full asset history | P1 | not-started (underlying custody/incident/stocktake data is all real and queryable; no dedicated report views were built) |
+| REQ-AST-11 | Employee self-service: confirm receipt, request return, report damage | P1 | done |
+| REQ-AST-12 | Assets module Policies (warehouse keeper scope; salary/other-warehouse access separate) | P1 | done |
+| REQ-AST-13 | Pest tests matching spec §23 asset rows: two simultaneous issue attempts on same asset → only one transaction succeeds; kit partially returned → correct remaining obligation and item condition | P1 | done |
 
 ## REQ-PRJ — Projects & Work Breakdown (spec §10 project/WBS part)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-PRJ-01 | Project CRUD (code, name, client, manager, address, dates, status, members, budget baseline, documents) | P1 | not-started |
-| REQ-PRJ-02 | Optional-depth WBS: Project → corpus/zone → floor → space → work package → task; small projects need not populate every level | P1 | not-started |
-| REQ-PRJ-03 | Project membership management feeding Policy checks (manager sees own projects/resources only) | P1 | not-started |
-| REQ-PRJ-04 | Projects module Policies + Pest tests (PM cannot see other projects or other employees' personal rates) | P1 | not-started |
+| REQ-PRJ-01 | Project CRUD (code, name, client, manager, address, dates, status, members, budget baseline, documents) | P1 | done |
+| REQ-PRJ-02 | Optional-depth WBS: Project → corpus/zone → floor → space → work package → task; small projects need not populate every level | P1 | done |
+| REQ-PRJ-03 | Project membership management feeding Policy checks (manager sees own projects/resources only) | P1 | done |
+| REQ-PRJ-04 | Projects module Policies + Pest tests (PM cannot see other projects or other employees' personal rates) | P1 | done (FIX-02/A2 this session: `ProjectPolicy::viewAny()`'s `projects.view`-permission fallback, which let every `project_manager` see every project, was removed and regression-tested) |
 
 ## REQ-TSK — Tasks, Comments & Attachments (spec §10 task workflow part)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-TSK-01 | Task form (title, description, project/location, single accountable owner, additional assignees/team, priority, due date, planned duration, checklist, required tools/materials, dependencies, drawing+revision link, completion requirements, unit/planned/accepted quantity with configurable units) | P1 | not-started |
-| REQ-TSK-02 | Task status machine draft→assigned→in_progress→blocked→submitted→completed, with reviewer-return-to-in_progress-with-comment, cancel/reopen requiring reason, full history retained | P1 | not-started |
-| REQ-TSK-03 | Employee "mark done" flow: required photos/comment → submit for acceptance; manager normally closes; pre-enabled self-close for low-risk tasks visible on task + audit; server blocks closing someone else's task | P1 | not-started |
-| REQ-TSK-04 | TaskDependency with cycle prevention | P1 | not-started |
-| REQ-TSK-05 | Comments: text, mentions, replies, author/time, edit history | P1 | not-started |
-| REQ-TSK-06 | Attachments: photo/PDF upload from mobile camera, multi-photo, progress/retry, caption, before/after classification; upload time is the trusted timestamp, EXIF is unverified metadata; optional/transparent GPS, no hidden tracking | P1 | not-started |
-| REQ-TSK-07 | Completion rules: required checklist, minimum evidence by task type, accepted ≤ submitted quantity, re-acceptance doesn't double-count volume, failed required-photo upload keeps submission recoverable in draft (never silently "submitted") | P1 | not-started |
-| REQ-TSK-08 | Views: my day, list, Kanban, calendar (Gantt/dependency scheduling explicitly P2, not built now); filters by project/team/owner/due/status/zone | P1 | not-started |
-| REQ-TSK-09 | Blocked task requires reason + owner of unblocking | P1 | not-started |
-| REQ-TSK-10 | Project progress computed from accepted quantities/weights per unit type; never sums incompatible units or treats raw task count as real progress | P1 | not-started |
-| REQ-TSK-11 | Tasks module Policies + Pest tests matching spec §23: task closure without required photo → validation error, draft preserved; offline comment/photo resubmitted → single submission, no duplicate; employee opening someone else's task/file URL → denied server-side | P1 | not-started |
+| REQ-TSK-01 | Task form (title, description, project/location, single accountable owner, additional assignees/team, priority, due date, planned duration, checklist, required tools/materials, dependencies, drawing+revision link, completion requirements, unit/planned/accepted quantity with configurable units) | P1 | done |
+| REQ-TSK-02 | Task status machine draft→assigned→in_progress→blocked→submitted→completed, with reviewer-return-to-in_progress-with-comment, cancel/reopen requiring reason, full history retained | P1 | done |
+| REQ-TSK-03 | Employee "mark done" flow: required photos/comment → submit for acceptance; manager normally closes; pre-enabled self-close for low-risk tasks visible on task + audit; server blocks closing someone else's task | P1 | in-progress (submit-for-acceptance flow with server-side ownership enforcement is done; a distinct "pre-enabled self-close for low-risk tasks" toggle/permission was not built) |
+| REQ-TSK-04 | TaskDependency with cycle prevention | P1 | done |
+| REQ-TSK-05 | Comments: text, mentions, replies, author/time, edit history | P1 | done |
+| REQ-TSK-06 | Attachments: photo/PDF upload from mobile camera, multi-photo, progress/retry, caption, before/after classification; upload time is the trusted timestamp, EXIF is unverified metadata; optional/transparent GPS, no hidden tracking | P1 | done |
+| REQ-TSK-07 | Completion rules: required checklist, minimum evidence by task type, accepted ≤ submitted quantity, re-acceptance doesn't double-count volume, failed required-photo upload keeps submission recoverable in draft (never silently "submitted") | P1 | done |
+| REQ-TSK-08 | Views: my day, list, Kanban, calendar (Gantt/dependency scheduling explicitly P2, not built now); filters by project/team/owner/due/status/zone | P1 | done (PROJECT-01: Kanban drag maps to the real Task actions it corresponds to and rejects anything else; calendar view added) |
+| REQ-TSK-09 | Blocked task requires reason + owner of unblocking | P1 | done |
+| REQ-TSK-10 | Project progress computed from accepted quantities/weights per unit type; never sums incompatible units or treats raw task count as real progress | P1 | done |
+| REQ-TSK-11 | Tasks module Policies + Pest tests matching spec §23: task closure without required photo → validation error, draft preserved; offline comment/photo resubmitted → single submission, no duplicate; employee opening someone else's task/file URL → denied server-side | P1 | done |
 
 ## REQ-JRN — Daily Site Journal, baseline (spec §11)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-JRN-01 | Daily report form (project/date, responsible person, teams, attendance-derived headcount + manual override/variance note, work performed, equipment used, materials received, delays, quality/safety notes, photos, next-day plan, manual weather) | P1 | not-started |
-| REQ-JRN-02 | Fill → submit → manager-accept workflow | P1 | not-started |
-| REQ-JRN-03 | Closed-day edit creates a revision, not an overwrite | P1 | not-started |
-| REQ-JRN-04 | Journal work quantity links to task accepted_quantity by reference; no duplicate financial posting | P1 | not-started |
-| REQ-JRN-05 | Daily Journal module Policies + Pest tests | P1 | not-started |
+| REQ-JRN-01 | Daily report form (project/date, responsible person, teams, attendance-derived headcount + manual override/variance note, work performed, equipment used, materials received, delays, quality/safety notes, photos, next-day plan, manual weather) | P1 | done |
+| REQ-JRN-02 | Fill → submit → manager-accept workflow | P1 | done (JOURNAL-01 also fixed a real bug here: Accept/ReturnDailyReportAction wrote `approvals.decision` values outside that shared table's actual enum, so every real accept/return 500'd before this pass) |
+| REQ-JRN-03 | Closed-day edit creates a revision, not an overwrite | P1 | done |
+| REQ-JRN-04 | Journal work quantity links to task accepted_quantity by reference; no duplicate financial posting | P1 | done |
+| REQ-JRN-05 | Daily Journal module Policies + Pest tests | P1 | done |
 
 ## REQ-NTF — Notifications & PWA finalization (spec §17)
 
 | ID | Requirement | Phase | Status |
 |---|---|---|---|
-| REQ-NTF-01 | In-app notifications: task assigned, tool return due, mention, overdue, tool deadline, timesheet exception, device fault | P1 | not-started |
-| REQ-NTF-02 | Notification dedup, read/unread, deep link, per-user preferences | P1 | not-started |
-| REQ-NTF-03 | Safe preview formatting: never show full salary or full card number in lock-screen/preview text | P1 | not-started |
-| REQ-NTF-04 | Mobile offline: pre-cached own tasks (bounded), comment/photo draft + queued submission, distinct "saved locally" vs "sent to server" states | P1 | not-started |
-| REQ-NTF-05 | Photo blob local retention when space allows; quota handling with honest (non-false-positive) save confirmation | P1 | not-started |
-| REQ-NTF-06 | Idempotent replay on reconnect; parent-task version-conflict handling; revoked-permission or closed-task offline submissions go to triage, not silent accept | P1 | not-started |
-| REQ-NTF-07 | Financial approval, final tool issue, and credential changes explicitly blocked in offline mode | P1 | not-started |
-| REQ-NTF-08 | Logout clears protected cache; salary/personal-ID never cached offline by default | P1 | not-started |
-| REQ-NTF-09 | IndexedDB-bounded offline queue; resync on foreground/app-open/network-restore; background sync is optional enhancement only, not relied on for iOS closed-app upload | P1 | not-started |
-| REQ-NTF-10 | No shared cache of authorized responses; logout/user-switch clears protected local data | P1 | not-started |
-| REQ-NTF-11 | Manual acceptance test pass on real Android Chrome + real iPhone Safari (install, standalone launch, login/logout, camera upload, restart draft recovery, foreground sync/dedup, safe SW update) with OS/browser versions recorded — simulator/emulation alone does not satisfy this | P1 | not-started |
-| REQ-NTF-12 | Notifications/offline module Policies + Pest/E2E tests (duplicate offline submission → single result) | P1 | not-started |
+| REQ-NTF-01 | In-app notifications: task assigned, tool return due, mention, overdue, tool deadline, timesheet exception, device fault | P1 | done |
+| REQ-NTF-02 | Notification dedup, read/unread, deep link, per-user preferences | P1 | done |
+| REQ-NTF-03 | Safe preview formatting: never show full salary or full card number in lock-screen/preview text | P1 | done (`SensitivePreviewGuard`, a hard write-time check, not just UI formatting) |
+| REQ-NTF-04 | Mobile offline: pre-cached own tasks (bounded), comment/photo draft + queued submission, distinct "saved locally" vs "sent to server" states | P1 | in-progress (comment/photo draft+queue with distinct local/sent states is done and end-to-end verified; a bounded local pre-cache of the task LIST itself for offline browsing was not built — PWA-01's scope was submission, not offline reading) |
+| REQ-NTF-05 | Photo blob local retention when space allows; quota handling with honest (non-false-positive) save confirmation | P1 | in-progress (blob retention in IndexedDB is done and durability-corrected this session; an explicit `QuotaExceededError` handling path was not separately built/tested) |
+| REQ-NTF-06 | Idempotent replay on reconnect; parent-task version-conflict handling; revoked-permission or closed-task offline submissions go to triage, not silent accept | P1 | done |
+| REQ-NTF-07 | Financial approval, final tool issue, and credential changes explicitly blocked in offline mode | P1 | done (trivially true by scope — the offline queue only ever carries Task photo/submission actions; neither a financial approval nor a device/credential action exists on that path) |
+| REQ-NTF-08 | Logout clears protected cache; salary/personal-ID never cached offline by default | P1 | done |
+| REQ-NTF-09 | IndexedDB-bounded offline queue; resync on foreground/app-open/network-restore; background sync is optional enhancement only, not relied on for iOS closed-app upload | P1 | in-progress (resync on reconnect/app-open is done and verified with real offline emulation; no explicit queue size/count bound is enforced yet) |
+| REQ-NTF-10 | No shared cache of authorized responses; logout/user-switch clears protected local data | P1 | done (this app has no separate "user-switch without logout" concept — logout is the only such boundary, and it's covered) |
+| REQ-NTF-11 | Manual acceptance test pass on real Android Chrome + real iPhone Safari (install, standalone launch, login/logout, camera upload, restart draft recovery, foreground sync/dedup, safe SW update) with OS/browser versions recorded — simulator/emulation alone does not satisfy this | P1 | blocked (no physical device available in this session; the closest available verification — real Chromium network-level offline emulation — was done, but this ticket's own wording explicitly excludes emulation as sufficient) |
+| REQ-NTF-12 | Notifications/offline module Policies + Pest/E2E tests (duplicate offline submission → single result) | P1 | done |
 
 ## REQ-MAT — Materials, Warehouses, Procurement, Budget (P2 — backlog only, not built now)
 

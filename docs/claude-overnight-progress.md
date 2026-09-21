@@ -2,6 +2,29 @@
 
 Live checkpoint file. Update after every bounded task per `docs/claude-overnight-goal.md`'s execution loop. Newest entry on top.
 
+## Completed: implementation-plan.md status refresh (OPS-01)
+
+**Status:** done. Documentation-only — `docs/implementation-plan.md`'s master backlog Status column was stale (every P0/P1 row still said `not-started`, unchanged since Foundation scaffold, despite this session alone closing roughly 20 real tickets across Auth/RBAC, Companies, Devices, Employees, Contractors, Attendance, Payroll, Timesheets+PDF+email, Projects/Tasks+Kanban+Calendar, DailyJournal, Assets+Stocktake, Notifications+Telegram, and PWA offline sync).
+
+**Method:** went row by row through REQ-FND/EMP/DEV/ATT/TSH/PAY/AST/PRJ/TSK/JRN/NTF, requiring real on-disk evidence (a migration, model, controller, route, Vue page, or a genuinely passing test) before marking anything `done` — never from this file's own or another doc's prior claims, never from memory. REQ-EMP/DEV/ATT/TSH/most-of-PAY were already correctly marked from an earlier pass and left untouched. The P2+ backlog-only groups (REQ-MAT/REQ-CRM/REQ-EXT — materials/procurement/CRM/quality/safety/documents/subcontractors/equipment/AI-assist — never touched by any ticket this session) were sanity-checked as still correctly `not-started`, not deeply re-verified row by row (correctly out of scope, per the file's own agent-assignment ordering).
+
+**Tally:** REQ-FND 25/25 → `done`. REQ-AST 10 `done` / 2 `in-progress` / 1 stays `not-started`. REQ-PRJ 4/4 `done`. REQ-TSK 10 `done` / 1 `in-progress`. REQ-JRN 5/5 `done`. REQ-NTF 8 `done` / 3 `in-progress` / 1 `blocked`. REQ-PAY-12/13 (CSV export) correctly untouched at `not-started` — genuinely never built.
+
+**Real, concrete gaps this pass surfaced (not previously written down anywhere), each small and independently pickup-able:**
+- REQ-AST-02: `assets.qr_token` is generated but no route resolves a scanned token to a Policy-checked asset page.
+- REQ-AST-07/10: damage/loss/write-off is real and approval-gated; a standalone `Maintenance` vendor/due-date/cost record UI, and any of the named Assets reports (who-holds-what, overdue, per-project allocation, service history, lost-assets, full history), were never built — the underlying data all already exists and is queryable.
+- REQ-TSK-03: task submit→accept is fully real; the specific "pre-enabled self-close for low-risk tasks" toggle named in the requirement was never implemented as its own feature.
+- REQ-NTF-04/05/09: PWA-01's real, tested scope was offline task-action submission/replay — a bounded pre-cache of the task LIST for offline *reading*, explicit `QuotaExceededError` handling, and an enforced queue size/count bound were none of them actually built, despite being named in the same requirement group.
+- REQ-NTF-11: real Android Chrome/iPhone Safari device acceptance — genuinely blocked, no physical device in this session, and this requirement's own wording explicitly says emulation (which PWA-01 did do, thoroughly) does not satisfy it.
+
+**Contract/schema changes:** none — Status column only, every requirement ID/text preserved exactly per the file's own stated rule.
+
+**Not committed/pushed** — left for review.
+
+**Next:** remaining real backlog per `docs/claude-overnight-goal.md`: BIO-03/BIO-04 remainders (blocked, real BioStar API access), OPS-01's own live-hosting execution (blocked, real hosting decision), REQ-NTF-11 (blocked, physical device) — plus the five small, well-scoped, genuinely-buildable gaps this pass just surfaced above, for whoever picks this up next.
+
+---
+
 ## Completed: QUEUE-01 fully closed out (system actor, incremental attendance, device health-check)
 
 **Status:** done, verified. Closes out QUEUE-01 entirely — the relay/RLS half was already done earlier this session; this is the "system actor" design decision plus the two scheduled commands that decision unblocked.
