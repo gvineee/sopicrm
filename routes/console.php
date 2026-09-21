@@ -51,3 +51,11 @@ Schedule::command('attendance:process-incremental')->everyFiveMinutes()->without
  * by construction (it only runs when a heartbeat DOES arrive).
  */
 Schedule::command('devices:health-check')->everyFifteenMinutes()->withoutOverlapping();
+
+/**
+ * NOTIFY-01 (deferred remainder): the scheduled half of Telegram reporting
+ * — App\Console\Commands\TelegramSendDigest's own docblock has the full
+ * design. Once daily, offset from `notifications:notify-due-items`'s own
+ * 08:00 slot so the two don't contend for the same minute.
+ */
+Schedule::command('telegram:send-digest')->dailyAt('08:30')->withoutOverlapping();

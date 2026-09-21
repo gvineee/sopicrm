@@ -698,3 +698,55 @@ Baseline before this session's changes: 144 tests (142 passed / 2 skipped, 686 a
 **Note on the shared working tree:** a concurrent process was mid-edit on `NavigationService.php`/`AppSidebar.vue`/mobile-nav files throughout — left untouched. `pint --dirty` (run as part of this ticket's own gate, operating on the whole dirty tree) also auto-fixed two files belonging to a different concurrent QUEUE-01 pass (`GetOrCreateSystemActorAction.php`, `SystemActorAndSchedulingTest.php`) — harmless style-only fixes, not reviewed or claimed as this ticket's work.
 
 **Next:** NOTIFY-01's scheduled Telegram digest, BIO-03/BIO-04 remainders (blocked on real BioStar API access), OPS-01 execution (blocked on a real hosting decision). QUEUE-01's system-actor slice appears to be in progress concurrently per the file evidence above.
+
+---
+
+## Completed: FILES-01 (closes out — Contractor act evidence preview)
+
+**Status:** done, verified. Closes out FILES-01 entirely (Task-side half was already done, see the earlier FILES-01 entry above).
+
+**Real gap found:** `ContractorActResource` already returned an `evidence` array (id/original_filename/mime_type/status) — metadata only, no URL, no route to actually stream the file. A manager reviewing a pending contractor act had no way to open the submitted photo/document before accepting or returning it.
+
+**What was done:** new `GET contractors/{contractor}/acts/{act}/attachments/{attachment}` route → `ContractorActController::showAttachment()`, directly mirroring `TaskController::showAttachment()`'s ownership-check shape. The one real domain difference: evidence attachments are owned by the `Contractor` model (`App\Domain\Contractors\Actions\UploadContractorAttachment` sets `owner_type = Contractor::class`), not the `ContractorAct` — so `attachmentBelongsToAct()` checks that the attachment still belongs to this contractor AND that its id appears in the act's own `evidence_attachment_ids` array, rather than a direct owner match against the act (which the domain's own design makes structurally impossible). Served inline via `Storage::disk()->response()`, same as the Task-side fix. `ContractorActResource::evidence[]` now includes a real `url`, present only when `status === 'available'`. `Contractors/Contracts/Show.vue` renders real clickable/thumbnail evidence previews (image thumbnail inline, filename link otherwise) instead of a bare `{{ act.evidence.length }}` count.
+
+**A real PHPStan finding along the way:** `ContractorAct` had no `@property` docblock for `evidence_attachment_ids`, so Larastan inferred the cast attribute's type as `array|string` rather than `list<string>` — `in_array($id, $act->evidence_attachment_ids ?? [], true)` failed strict analysis. Added the docblock (matching `CustodyTransaction::$photo_attachment_ids`'s existing precedent elsewhere in this codebase) rather than a type-widening workaround.
+
+**Files changed:** `app/Http/Controllers/Contractors/ContractorActController.php` (+`showAttachment()`/`attachmentBelongsToAct()`), `app/Http/Resources/Contractors/ContractorActResource.php` (+`url` per evidence item), `app/Domain/Contractors/Models/ContractorAct.php` (+`@property` docblock), `routes/modules/web-contractors.php` (+1 route), `resources/js/pages/Contractors/Contracts/Show.vue`; new `tests/Feature/Contractors/ContractorActAttachmentPreviewTest.php` (3 tests: own-evidence open with a real URL asserted in the Inertia response, an attachment id from a different act rejected even though both belong to the same contractor, cross-organization 404 via the existing tenant-scoped route-model-binding).
+
+**Contract/schema changes:** none.
+
+**Verification:**
+- `php artisan test --compact --group=contractors` → **13 passed** (69 assertions).
+- Whole-app `php artisan test --compact` → one unrelated failure in `TelegramDigestTest`, confirmed via `git status` to belong to a different concurrent session's own uncommitted work (`app/Console/Commands/TelegramSendDigest.php`, `tests/Feature/Notifications/TelegramDigestTest.php`, both untouched by this ticket).
+- `vendor/bin/phpstan analyse` (whole app) → **0 errors**.
+- `vendor/bin/pint --dirty --test` → clean.
+- `npm run types:check` / `npm run build` → passed.
+
+**Next:** NOTIFY-01's scheduled Telegram digest appears to be actively in progress concurrently (per the files noted above) — not this ticket's concern. Remaining backlog otherwise unchanged: BIO-03/BIO-04 remainders (blocked on real BioStar API access), OPS-01 execution (blocked on a real hosting decision).
+
+---
+
+## Completed: NOTIFY-01 fully closed out (scheduled Telegram digest)
+
+**Status:** done, verified. Closes NOTIFY-01 out entirely — the manual "send me a report now" flow already existed; this is the scheduled half `docs/agent-handoff.md`'s own NOTIFY-01 entry recorded as the deferred next step.
+
+**Design:** new `php artisan telegram:send-digest`, scheduled `dailyAt('08:30')` (offset from `notifications:notify-due-items`'s existing `08:00` slot so the two never contend for the same minute). For every organization, for every `TelegramLink` with `linked_at` actually set (a pending, unconsumed code is never sent to), attempts every `TelegramReportType::all()` once per calendar day and lets `SendTelegramReportAction`'s OWN existing authorization re-check decide which types actually go out for that recipient — this command duplicates zero authorization logic, it only decides *when* to try each type once per day. Reuses that Action's existing `TelegramReportDelivery` row as the sole history/retry record; a recipient authorized for nothing that day gets zero messages and zero new rows, exactly as a denied manual request already produces. Gets a per-organization system actor (this session's own `GetOrCreateSystemActorAction`, QUEUE-01) to attribute each scheduled send's `requested_by_user_id` to.
+
+**Real bug found and fixed via this command's own multi-organization test, not code review:** the command correctly set `CurrentOrganization`/the Postgres `app.current_org_id` GUC per organization (matching `attendance:process-incremental`/`devices:health-check`'s already-established pattern) but never set spatie/laravel-permission's own "team id" (`PermissionRegistrar::setPermissionsTeamId()`) — normally set per real HTTP request by `SetCurrentOrganization` middleware, which no console command ever runs through. Without it, every `$recipient->can(...)`/`Gate::forUser(...)` call inside `SendTelegramReportAction` resolved against whichever organization's team id happened to be set LAST across the whole process — meaning every organization except the final one in a multi-tenant run got a wrong (false-denied or false-allowed) permission result. Confirmed exactly this failure mode with a two-organization test before fixing it, then fixed by setting the team id alongside the two existing tenant-context mechanisms. Checked whether the two other QUEUE-01-era scheduled commands share this bug: `devices:health-check` does not, because it already routes every permission check through `App\Domain\Notifications\Support\UsersWithPermission::inOrganization()`, which already sets/restores the team id internally for exactly this reason; `attendance:process-incremental` makes no permission check at all. This was specific to being the first scheduled command to call a permission check directly on an arbitrary (non-request-authenticated) user.
+
+**Files changed:** new `app/Console/Commands/TelegramSendDigest.php`; `routes/console.php` (+1 scheduled entry); new `tests/Feature/Notifications/TelegramDigestTest.php` (5 tests).
+
+**Contract/schema changes:** none — reuses the existing `telegram_report_deliveries` table (no dedup_key column there, unlike the in-app `notifications` table, so dedup is a direct `whereDate('created_at', today)` check per `(telegram_link_id, report_type)` instead).
+
+**Verification:**
+- `php artisan test --compact` → **285 tests, 282 passed / 3 skipped** (1397 assertions).
+- `vendor/bin/phpstan analyse` (whole app) → **0 errors**.
+- `vendor/bin/pint --dirty --test` → clean.
+- `npm run types:check` → clean (no frontend files touched).
+- No migration needed — `php artisan migrate --pretend` confirmed "Nothing to migrate."
+
+**Real multi-org isolation proof (the exact assertion, not a summary):** two organizations, each with its own linked+permitted user; one run of the command; both organizations' `TelegramReportDelivery` rows read back (via a deliberate `withoutTenantScope()` test-side query, mirroring `TenantIsolationRlsTest`'s own established pattern for this exact kind of cross-tenant assertion — the command's own tenant context is correctly restored and scoped by the time the test asserts, so a plain scoped query would only ever see one side) with each row's `organization_id` matching its own real organization and `CurrentOrganization::id()` correctly restored to `null` after the whole run. Also proven: a second same-day run never double-sends (delivery count for a given link+type stays 1); a user lacking `access-financial-data` never gets a financial-summary delivery row at all; an unlinked `TelegramLink` is skipped entirely; one recipient's forced transport failure (`FakeTelegramTransport::forceFailureFor()`) never blocks or duplicates another recipient's send in the same run.
+
+**Note on the shared working tree:** a concurrent process was mid-edit on `NavigationService.php`/`AppSidebar.vue`/mobile-nav files throughout this task, and a separate parallel session was finishing FILES-01's Contractor-evidence remainder at the same time (see the entry above) — both left completely untouched, per this file's own no-interference protocol.
+
+**Next:** as of this entry, no other genuinely buildable ticket remains open in `docs/claude-overnight-goal.md`'s backlog. What's left: BIO-03/BIO-04 remainders (blocked on real BioStar API access — no live server or current API docs available to any session so far), OPS-01 execution (blocked on a real hosting/VPS decision only the user can make). Both require an external unblock, not more implementation time.
