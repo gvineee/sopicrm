@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "attendance_anomalies" (spec section 7).
@@ -26,6 +27,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Employee (spec explicit: unknown cards never auto-create one) — those
  * rows carry `device_id`/`raw_access_event_id` instead of a fabricated
  * employee_id.
+ */
+/**
+ * @property Carbon $detected_at
+ * @property Carbon|null $resolved_at
+ * @property array<string, mixed> $details
  */
 class AttendanceAnomaly extends Model
 {

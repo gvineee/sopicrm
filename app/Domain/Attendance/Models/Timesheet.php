@@ -7,6 +7,7 @@ use App\Domain\Payroll\Models\PayPeriod;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\TimesheetFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,7 +22,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * never silently changes what was already approved. Rejected returns to
  * `draft` with `rejected_reason` populated.
  */
-/** @property array<string, mixed>|null $source_sessions_version_snapshot */
+/**
+ * @property array<string, mixed>|null $source_sessions_version_snapshot
+ * @property CarbonInterface|null $submitted_at
+ * @property CarbonInterface|null $approved_at
+ * @property CarbonInterface|null $locked_at
+ */
 class Timesheet extends Model
 {
     /** @use HasFactory<TimesheetFactory> */

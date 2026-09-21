@@ -17,6 +17,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * policy is documented, configurable JSON — never hardcoded in application
  * code.
  */
+/**
+ * @property array<int, string> $scheduled_days
+ * @property array<string, mixed> $break_policy
+ * @property array<string, mixed> $rounding_policy
+ */
 class ShiftTemplate extends Model
 {
     /** @use HasFactory<ShiftTemplateFactory> */

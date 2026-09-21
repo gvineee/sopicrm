@@ -1,0 +1,476 @@
+<?php
+
+namespace App\Domain\Attendance\Actions;
+
+use App\Domain\Attendance\Models\AttendanceAdjustment;
+use App\Domain\Attendance\Models\AttendanceAnomaly;
+use App\Domain\Attendance\Models\AttendanceSession;
+use App\Domain\Attendance\Models\AttendanceSessionBreakDeduction;
+use App\Domain\Attendance\Models\RawAccessEvent;
+use App\Domain\Attendance\Models\ShiftAssignment;
+use App\Domain\Attendance\Models\ShiftTemplate;
+use App\Domain\Attendance\Support\BreakPolicyCalculator;
+use App\Domain\Attendance\Support\ProjectAttributionResolver;
+use App\Domain\Devices\Models\CredentialAssignment;
+use App\Domain\Devices\Models\ExternalIdentifierMapping;
+use App\Domain\Employees\Models\Employee;
+use App\Domain\Timesheets\Actions\HandleLateArrivingEventAction;
+use App\Domain\Timesheets\Support\TimesheetLockGuard;
+use App\Domain\Timesheets\Support\WorkDateResolver;
+use App\Models\User;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+/**
+ * REQ-ATT-03..08: deterministic, re-runnable AttendanceSession reconstruction
+ * from RawAccessEvents. Re-running against the same raw events for the same
+ * employee/range always produces the same sessions — achieved by superseding
+ * (never deleting/mutating) every non-superseded session touching the range
+ * before rebuilding it fresh from the ordered raw event stream.
+ *
+ * Reuses App\Domain\Timesheets\Support\WorkDateResolver deliberately: the
+ * "night shift attributes to its start date" rule is spec-identical between
+ * Attendance and Timesheets (data-model.md), and it is a pure, dependency-free
+ * static helper — importing it here does not create a reverse dependency on
+ * any Timesheets business logic.
+ *
+ * Anomaly detection covers the five anomaly types that only make sense at
+ * reconstruction time (duplicate_in, unknown_out, missing_out,
+ * excessive_duration, impossible_site_crossing, late_arriving_data);
+ * out_of_order_events, data_gap and clock_drift are detected earlier, at
+ * ingestion time, by App\Domain\Devices\Actions\IngestRawAccessEventAction.
+ *
+ * `flagAnomaly()` deduplicates against any existing *unresolved* anomaly of
+ * the same type for the same underlying trigger (the session, for
+ * session-attached types; the specific raw event, for the two device-level
+ * types that have no session) — a rerun of reconstruction over an
+ * already-processed range never spams a second row for the same real
+ * condition (ATT-01, reviewed 2026-09-21).
+ *
+ * Locked-period events (spec section 7 hard rule: "Locked პერიოდში
+ * დაგვიანებული მოვლენა ქმნის adjustment request-ს; ისტორიულ ხელფასს ჩუმად არ
+ * ცვლის") never reach the session state machine at all: for any event whose
+ * work_date's Timesheet is already `locked` (per
+ * App\Domain\Timesheets\Support\TimesheetLockGuard), that work_date's
+ * existing sessions are left completely untouched (not even superseded), and
+ * the event is routed to App\Domain\Timesheets\Actions\HandleLateArrivingEventAction
+ * instead — which creates a flagged AttendanceAdjustment for a human to
+ * review, never a silent rewrite of already-paid history.
+ *
+ * ATT-01 (docs/claude-platform-completion-2026-09-21.md, audit finding B3),
+ * two real bugs fixed:
+ *  - A denied swipe (`event_code === 'access_denied'`) is now excluded
+ *    before it ever reaches the state machine — previously any event with a
+ *    real `reader_direction_snapshot` opened/closed a session regardless of
+ *    whether the door actually granted access. The real Suprema adapter does
+ *    not yet normalize BioStar's own event-code taxonomy into
+ *    granted/denied (`services/device-connector/src/adapters/suprema-device-gateway.js`
+ *    still emits `biostar:<raw code>` unmapped — that normalization is
+ *    BIO-04's job); this filter catches the simulator's already-normalized
+ *    `access_denied` code today and will keep working once BIO-04 maps real
+ *    BioStar codes onto the same convention, with no further change needed
+ *    here.
+ *  - Events were previously selected once per (employee, range) by finding
+ *    every credential ever assigned to that employee whose validity window
+ *    overlapped the range AT ALL, then pulling every one of that
+ *    credential's events across the whole range — so if a physical card was
+ *    reassigned from employee A to employee B partway through the range,
+ *    BOTH employees' reconstructions could pick up the other's events for
+ *    whichever days actually belonged to them. Each event is now
+ *    individually re-checked against `CredentialAssignment::scopeActiveAt()`
+ *    for that event's own `normalized_event_time_utc`, not the range as a
+ *    whole.
+ *
+ * BIO-02: `orderedEventsFor()` also pulls in historical events whose card
+ * went unrecognized at ingestion time (`credential_id = null`,
+ * `unmatched_credential_ref` set) once a human has confirmed that reference
+ * via App\Domain\Devices\Actions\ConfirmExternalIdentifierMappingAction —
+ * resolved through App\Domain\Devices\Models\ExternalIdentifierMapping,
+ * never by rewriting the immutable RawAccessEvent row itself.
+ */
+class ReconstructAttendanceSessionsAction
+{
+    public function __construct(
+        private readonly TimesheetLockGuard $lockGuard,
+        private readonly HandleLateArrivingEventAction $handleLateArrivingEvent,
+    ) {}
+
+    /**
+     * @return list<AttendanceSession>
+     */
+    public function handle(Employee $employee, CarbonInterface $from, CarbonInterface $to, User $actor): array
+    {
+        return DB::transaction(function () use ($employee, $from, $to, $actor) {
+            $runId = (string) Str::uuid();
+
+            $events = $this->orderedEventsFor($employee, $from, $to);
+
+            // spec section 7 hard rule: "Locked პერიოდში დაგვიანებული მოვლენა
+            // ქმნის adjustment request-ს; ისტორიულ ხელფასს ჩუმად არ ცვლის."
+            // An event whose work_date's timesheet is already locked is never
+            // folded into a session rebuild — it's routed to a human review
+            // queue instead, and that work_date's existing sessions are left
+            // untouched entirely (not even superseded).
+            $lockedWorkDates = [];
+            $normalEvents = [];
+
+            foreach ($events as $event) {
+                $workDate = WorkDateResolver::startDateFor($event->normalized_event_time_utc);
+
+                if ($this->lockGuard->isWorkDateLocked($employee->id, $workDate)) {
+                    $lockedWorkDates[$workDate->toDateString()] = true;
+                    $this->routeLockedPeriodEvent($employee, $event, $workDate, $actor);
+
+                    continue;
+                }
+
+                $normalEvents[] = $event;
+            }
+
+            AttendanceSession::query()
+                ->where('employee_id', $employee->id)
+                ->where('status', '!=', 'superseded')
+                ->whereBetween('clock_in_at', [$from, $to])
+                // work_date is stored as a full datetime (e.g. "2026-09-21
+                // 00:00:00"), so this must compare on the date part only —
+                // a plain whereNotIn against Y-m-d strings never matches.
+                ->when(
+                    $lockedWorkDates !== [],
+                    fn ($query) => $query->whereNotIn(DB::raw('date(work_date)'), array_keys($lockedWorkDates)),
+                )
+                ->update(['status' => 'superseded']);
+
+            $sessions = [];
+            $open = null;
+            $previousEvent = null;
+
+            foreach ($normalEvents as $event) {
+                $direction = $event->reader_direction_snapshot;
+
+                if ($direction === 'unspecified') {
+                    continue;
+                }
+
+                $this->checkLateArriving($employee, $event);
+
+                if ($direction === 'in') {
+                    if ($open !== null) {
+                        $this->flagAnomaly($employee->id, 'duplicate_in', $open, [
+                            'existing_session_id' => $open->id,
+                            'duplicate_raw_access_event_id' => $event->id,
+                        ]);
+                        $previousEvent = $event;
+
+                        continue;
+                    }
+
+                    $open = $this->openSession($employee, $event, $runId);
+                    $sessions[] = $open;
+
+                    $this->checkImpossibleCrossing($employee, $previousEvent, $event, $open);
+                } else {
+                    if ($open === null) {
+                        $this->flagAnomaly($employee->id, 'unknown_out', null, [
+                            'raw_access_event_id' => $event->id,
+                        ]);
+                        $previousEvent = $event;
+
+                        continue;
+                    }
+
+                    $this->closeSession($open, $event);
+                    $open = null;
+                }
+
+                $previousEvent = $event;
+            }
+
+            if ($open !== null) {
+                $this->flagAnomaly($employee->id, 'missing_out', $open, [
+                    'clock_in_event_id' => $open->clock_in_event_id,
+                ]);
+            }
+
+            return $sessions;
+        });
+    }
+
+    /**
+     * Simulator-produced denial code (`App\Domain\Devices\Adapters\SimulatorDeviceAdapter`'s
+     * own default-argument convention). The real Suprema adapter doesn't
+     * normalize onto this yet — see this class's docblock.
+     */
+    private const DENIED_EVENT_CODES = ['access_denied'];
+
+    /**
+     * @return Collection<int, RawAccessEvent>
+     */
+    private function orderedEventsFor(Employee $employee, CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        $credentialIds = CredentialAssignment::query()
+            ->where('employee_id', $employee->id)
+            ->where('valid_from', '<=', $to)
+            ->where(function ($query) use ($from): void {
+                $query->whereNull('valid_to')->orWhere('valid_to', '>=', $from);
+            })
+            ->pluck('credential_id');
+
+        if ($credentialIds->isEmpty()) {
+            return collect();
+        }
+
+        // BIO-02: a raw event ingested before its card was recognized keeps
+        // `credential_id = null` forever (RawAccessEvent is immutable) —
+        // `unmatched_credential_ref` is its only stable link back to a card.
+        // Once App\Domain\Devices\Actions\ConfirmExternalIdentifierMappingAction
+        // confirms that reference belongs to one of this employee's
+        // credentials, those old rows must be pulled in here too, or
+        // "reprocessing" after confirmation would have nothing to reprocess.
+        $confirmedRefsByCredentialId = ExternalIdentifierMapping::query()
+            ->where('external_type', 'card')
+            ->where('status', 'confirmed')
+            ->whereIn('target_id', $credentialIds)
+            ->pluck('target_id', 'external_identifier');
+
+        return RawAccessEvent::query()
+            ->where(function ($query) use ($credentialIds, $confirmedRefsByCredentialId): void {
+                $query->whereIn('credential_id', $credentialIds);
+
+                if ($confirmedRefsByCredentialId->isNotEmpty()) {
+                    $query->orWhereIn('unmatched_credential_ref', $confirmedRefsByCredentialId->keys());
+                }
+            })
+            ->whereBetween('normalized_event_time_utc', [$from, $to])
+            ->whereIn('reader_direction_snapshot', ['in', 'out'])
+            ->whereNotIn('event_code', self::DENIED_EVENT_CODES)
+            ->with('device')
+            ->orderBy('normalized_event_time_utc')
+            ->orderBy('native_event_id')
+            ->get()
+            // The query above only proves the credential was assigned to
+            // this employee SOMEWHERE inside [from, to] — a card reassigned
+            // from employee A to employee B partway through that range would
+            // otherwise let both reconstructions claim the same events. Each
+            // event is re-checked against who actually held the card at that
+            // event's own instant. A once-unmatched row resolves its
+            // effective credential via the confirmed mapping instead of its
+            // own (permanently null) `credential_id` column.
+            ->filter(fn (RawAccessEvent $event): bool => $this->credentialBelongedToEmployeeAt(
+                $employee->id,
+                $event->credential_id ?? $confirmedRefsByCredentialId->get($event->unmatched_credential_ref),
+                $event->normalized_event_time_utc,
+            ))
+            ->values();
+    }
+
+    private function credentialBelongedToEmployeeAt(string $employeeId, ?string $credentialId, CarbonInterface $at): bool
+    {
+        if ($credentialId === null) {
+            return false;
+        }
+
+        return CredentialAssignment::query()
+            ->where('credential_id', $credentialId)
+            ->where('employee_id', $employeeId)
+            ->activeAt(Carbon::instance($at))
+            ->exists();
+    }
+
+    private function openSession(Employee $employee, RawAccessEvent $event, string $runId): AttendanceSession
+    {
+        $device = $event->device;
+        $workDate = WorkDateResolver::startDateFor($event->normalized_event_time_utc);
+
+        return AttendanceSession::create([
+            'employee_id' => $employee->id,
+            'site_id' => $device->site_id,
+            'project_id' => ProjectAttributionResolver::resolve($employee->id, $device->site_id, $workDate),
+            'clock_in_event_id' => $event->id,
+            'clock_in_at' => $event->normalized_event_time_utc,
+            'work_date' => $workDate->toDateString(),
+            'reconstruction_run_id' => $runId,
+            'status' => 'open',
+        ]);
+    }
+
+    private function closeSession(AttendanceSession $session, RawAccessEvent $event): void
+    {
+        $clockIn = Carbon::instance($session->clock_in_at);
+        $clockOut = Carbon::instance($event->normalized_event_time_utc);
+        $rawMinutes = BreakPolicyCalculator::exactMinutes($clockIn, $clockOut);
+
+        $shiftTemplate = $this->resolveShiftTemplate($session->employee_id, $session->work_date);
+        $deductedMinutes = 0;
+
+        if ($shiftTemplate !== null) {
+            foreach (BreakPolicyCalculator::deductions($shiftTemplate->break_policy, $clockIn, $clockOut) as $deduction) {
+                AttendanceSessionBreakDeduction::query()->firstOrCreate(
+                    [
+                        'attendance_session_id' => $session->id,
+                        'shift_template_id' => $shiftTemplate->id,
+                        'break_window_key' => $deduction['key'],
+                    ],
+                    ['deducted_minutes' => $deduction['minutes']],
+                );
+                $deductedMinutes += $deduction['minutes'];
+            }
+        }
+
+        $payableMinutes = max(0, $rawMinutes - $deductedMinutes);
+
+        $session->update([
+            'clock_out_event_id' => $event->id,
+            'clock_out_at' => $event->normalized_event_time_utc,
+            'raw_duration_minutes' => $rawMinutes,
+            'payable_minutes' => $payableMinutes,
+            'status' => 'closed',
+        ]);
+
+        $threshold = (int) config('attendance.excessive_duration_minutes', 960);
+        if ($rawMinutes > $threshold) {
+            $this->flagAnomaly($session->employee_id, 'excessive_duration', $session, [
+                'raw_duration_minutes' => $rawMinutes,
+                'threshold_minutes' => $threshold,
+            ]);
+        }
+    }
+
+    private function resolveShiftTemplate(string $employeeId, mixed $workDate): ?ShiftTemplate
+    {
+        $date = $workDate instanceof CarbonInterface ? $workDate->toDateString() : (string) $workDate;
+
+        $assignment = ShiftAssignment::query()
+            ->where('employee_id', $employeeId)
+            ->where('effective_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('effective_to')->orWhere('effective_to', '>=', $date);
+            })
+            ->with('shiftTemplate')
+            ->orderByDesc('effective_from')
+            ->first();
+
+        return $assignment?->shiftTemplate;
+    }
+
+    private function checkImpossibleCrossing(
+        Employee $employee,
+        ?RawAccessEvent $previousEvent,
+        RawAccessEvent $event,
+        AttendanceSession $newSession,
+    ): void {
+        if ($previousEvent === null || $previousEvent->device->site_id === $event->device->site_id) {
+            return;
+        }
+
+        $gapMinutes = BreakPolicyCalculator::exactMinutes(
+            Carbon::instance($previousEvent->normalized_event_time_utc),
+            Carbon::instance($event->normalized_event_time_utc),
+        );
+
+        $minCrossingMinutes = (int) config('attendance.min_site_crossing_minutes', 30);
+
+        if ($gapMinutes < $minCrossingMinutes) {
+            $this->flagAnomaly($employee->id, 'impossible_site_crossing', $newSession, [
+                'previous_raw_access_event_id' => $previousEvent->id,
+                'previous_site_id' => $previousEvent->device->site_id,
+                'new_site_id' => $event->device->site_id,
+                'gap_minutes' => $gapMinutes,
+                'threshold_minutes' => $minCrossingMinutes,
+            ]);
+        }
+    }
+
+    private function checkLateArriving(Employee $employee, RawAccessEvent $event): void
+    {
+        $lagMinutes = BreakPolicyCalculator::exactMinutes(
+            Carbon::instance($event->normalized_event_time_utc),
+            Carbon::instance($event->received_at),
+        );
+
+        $threshold = (int) config('attendance.late_arrival_threshold_minutes', 60);
+
+        if ($lagMinutes > $threshold) {
+            $this->flagAnomaly($employee->id, 'late_arriving_data', null, [
+                'raw_access_event_id' => $event->id,
+                'lag_minutes' => $lagMinutes,
+                'threshold_minutes' => $threshold,
+            ]);
+        }
+    }
+
+    /**
+     * Idempotency guard: one flagged AttendanceAdjustment per (employee,
+     * work_date) is enough signal for a human reviewer — a rerun of
+     * reconstruction over the same already-locked range must not spam a new
+     * pending row per event.
+     */
+    private function routeLockedPeriodEvent(Employee $employee, RawAccessEvent $event, CarbonInterface $workDate, User $actor): void
+    {
+        $alreadyFlagged = AttendanceAdjustment::query()
+            ->where('employee_id', $employee->id)
+            ->where('work_date', $workDate->toDateString())
+            ->where('for_locked_period', true)
+            ->whereIn('status', ['pending', 'approved'])
+            ->exists();
+
+        if ($alreadyFlagged) {
+            return;
+        }
+
+        $this->handleLateArrivingEvent->handle(
+            $employee,
+            $event->normalized_event_time_utc,
+            $actor->id,
+            $event->device->site_id ?? null,
+            "attendance reconstruction pass, raw_access_event {$event->id}",
+        );
+    }
+
+    /**
+     * ATT-01: deduplicates against any existing *unresolved* anomaly for the
+     * same real-world trigger, so re-running reconstruction over an
+     * already-processed range doesn't spam a new row every time. Session-
+     * attached types (everything except `unknown_out`/`late_arriving_data`)
+     * dedupe on (employee, type, session) — a session is itself the stable,
+     * versioned artifact reconstruction never duplicates, so at most one
+     * unresolved anomaly of a given type ever needs to exist per session.
+     * The two device-level types with no session dedupe on the specific
+     * `raw_access_event_id` that triggered them instead, since that's the
+     * only stable identity available.
+     *
+     * @param  array<string, mixed>  $details
+     */
+    private function flagAnomaly(string $employeeId, string $type, ?AttendanceSession $session, array $details): void
+    {
+        $duplicateQuery = AttendanceAnomaly::query()
+            ->where('employee_id', $employeeId)
+            ->where('anomaly_type', $type)
+            ->whereNull('resolved_at');
+
+        if ($session !== null) {
+            $duplicateQuery->where('attendance_session_id', $session->id);
+        } elseif (isset($details['raw_access_event_id'])) {
+            $duplicateQuery->where('details->raw_access_event_id', $details['raw_access_event_id']);
+        } else {
+            // No stable natural key available for this anomaly — every
+            // current call site passes either a session or a
+            // raw_access_event_id, so this branch is defensive only.
+            return;
+        }
+
+        if ($duplicateQuery->exists()) {
+            return;
+        }
+
+        AttendanceAnomaly::create([
+            'employee_id' => $employeeId,
+            'attendance_session_id' => $session?->id,
+            'anomaly_type' => $type,
+            'detected_at' => now(),
+            'details' => $details,
+        ]);
+    }
+}

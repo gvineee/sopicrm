@@ -10,9 +10,14 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "shift_assignments".
+ */
+/**
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_to
  */
 class ShiftAssignment extends Model
 {

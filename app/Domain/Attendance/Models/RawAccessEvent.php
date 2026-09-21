@@ -23,6 +23,8 @@ use LogicException;
  * the dedup key itself.
  *
  * @property CarbonInterface $normalized_event_time_utc
+ * @property CarbonInterface $raw_device_time
+ * @property CarbonInterface $received_at
  */
 class RawAccessEvent extends Model
 {

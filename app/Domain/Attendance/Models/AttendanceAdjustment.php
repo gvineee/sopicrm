@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * docs/data-model.md "attendance_adjustments" (spec section 7). The
@@ -20,6 +21,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * reference-only. A late-arriving raw event for an already-locked timesheet
  * period sets `for_locked_period=true` instead of silently mutating locked
  * history.
+ */
+/**
+ * @property Carbon $work_date
+ * @property Carbon|null $corrected_clock_in_at
+ * @property Carbon|null $corrected_clock_out_at
  */
 class AttendanceAdjustment extends Model
 {
