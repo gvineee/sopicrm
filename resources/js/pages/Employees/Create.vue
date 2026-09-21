@@ -15,6 +15,7 @@ defineOptions({
 defineProps<{
     teams: Array<{ id: string; name: string }>;
     supervisors: Array<{ id: string; first_name: string; last_name: string }>;
+    positions: Array<{ id: string; name: string }>;
 }>();
 </script>
 
@@ -32,6 +33,7 @@ defineProps<{
                 mode="create"
                 :teams="teams"
                 :supervisors="supervisors"
+                :positions="positions"
             />
         </div>
     </div>

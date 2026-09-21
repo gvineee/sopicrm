@@ -12,6 +12,7 @@ type Employee = {
     full_name: string;
     phone?: string | null;
     position?: string | null;
+    job_position?: { id: string; name: string } | null;
     photo_url?: string | null;
     status: string;
     team?: { id: string; name: string } | null;
@@ -202,7 +203,7 @@ function uploadPhoto(event: Event) {
                     </h1>
                     <p class="text-muted-foreground text-sm">
                         {{ employee.internal_code }} ·
-                        {{ employee.position || 'პოზიცია არ არის მითითებული' }}
+                        {{ employee.job_position?.name || employee.position || 'პოზიცია არ არის მითითებული' }}
                     </p>
                     <label
                         v-if="canEdit"

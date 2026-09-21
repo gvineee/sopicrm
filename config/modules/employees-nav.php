@@ -16,6 +16,12 @@ return [
                 'route' => 'teams.index',
                 'permission' => 'employees.teams.manage',
             ],
+            [
+                'label' => 'პოზიციები',
+                'icon' => 'id-card',
+                'route' => 'positions.index',
+                'permission' => 'employees.employees.view',
+            ],
         ],
     ],
 ];

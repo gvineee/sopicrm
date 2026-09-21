@@ -9,6 +9,8 @@ type Employee = {
     last_name: string;
     phone?: string | null;
     position?: string | null;
+    position_id?: string | null;
+    job_position?: { id: string; name: string } | null;
     profession_skills?: string[];
     team?: { id: string } | null;
     supervisor?: { id: string } | null;
@@ -21,6 +23,7 @@ const props = defineProps<{
     employee: Employee;
     teams: Array<{ id: string; name: string }>;
     supervisors: Array<{ id: string; first_name: string; last_name: string }>;
+    positions: Array<{ id: string; name: string }>;
 }>();
 
 defineOptions({ layout: { mobileTitle: 'პროფილის რედაქტირება' } });
@@ -45,6 +48,7 @@ defineOptions({ layout: { mobileTitle: 'პროფილის რედაქ
                 :employee="props.employee"
                 :teams="teams"
                 :supervisors="supervisors"
+                :positions="positions"
             />
         </div>
     </div>

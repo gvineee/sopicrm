@@ -7,6 +7,7 @@ use App\Http\Controllers\Employees\EmployeePhotoController;
 use App\Http\Controllers\Employees\EmployeeProjectAssignmentController;
 use App\Http\Controllers\Employees\EmploymentController;
 use App\Http\Controllers\Employees\InviteAcceptController;
+use App\Http\Controllers\Employees\PositionController;
 use App\Http\Controllers\Employees\RateHistoryController;
 use App\Http\Controllers\Employees\TeamController;
 use App\Http\Controllers\Employees\TeamMembershipController;
@@ -34,4 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
     Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
     Route::patch('teams/{team}', [TeamController::class, 'update'])->name('teams.update');
+
+    Route::get('positions', [PositionController::class, 'index'])->name('positions.index');
+    Route::post('positions', [PositionController::class, 'store'])->name('positions.store');
+    Route::patch('positions/{position}', [PositionController::class, 'update'])->name('positions.update');
 });

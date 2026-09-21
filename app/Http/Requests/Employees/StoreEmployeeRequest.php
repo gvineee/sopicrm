@@ -36,6 +36,7 @@ class StoreEmployeeRequest extends FormRequest
             'personal_id_number' => ['nullable', 'string', 'max:50'],
             'photo_attachment_id' => ['nullable', 'uuid'],
             'position' => ['nullable', 'string', 'max:255'],
+            'position_id' => ['nullable', 'uuid', Rule::exists('positions', 'id')->where('organization_id', $this->user()->organization_id)],
             'profession_skills' => ['nullable', 'array'],
             'profession_skills.*' => ['string', 'max:100'],
             'team_id' => ['nullable', 'uuid', 'exists:teams,id'],
@@ -50,7 +51,7 @@ class StoreEmployeeRequest extends FormRequest
      * Return the validated payload in the exact shape consumed by the
      * employee creation domain action.
      *
-     * @return array{internal_code: string, first_name: string, last_name: string, phone: string|null, personal_id_number: string|null, photo_attachment_id: string|null, position: string|null, profession_skills: list<string>|null, team_id: string|null, supervisor_employee_id: string|null, emergency_contact_name: string|null, emergency_contact_phone: string|null, employment_started_at: string}
+     * @return array{internal_code: string, first_name: string, last_name: string, phone: string|null, personal_id_number: string|null, photo_attachment_id: string|null, position: string|null, position_id: string|null, profession_skills: list<string>|null, team_id: string|null, supervisor_employee_id: string|null, emergency_contact_name: string|null, emergency_contact_phone: string|null, employment_started_at: string}
      */
     public function employeeData(): array
     {
@@ -64,6 +65,7 @@ class StoreEmployeeRequest extends FormRequest
             'personal_id_number' => $this->validatedNullableString('personal_id_number'),
             'photo_attachment_id' => $this->validatedNullableString('photo_attachment_id'),
             'position' => $this->validatedNullableString('position'),
+            'position_id' => $this->validatedNullableString('position_id'),
             'profession_skills' => is_array($skills)
                 ? array_values(array_filter($skills, is_string(...)))
                 : null,

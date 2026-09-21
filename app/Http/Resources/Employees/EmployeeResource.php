@@ -38,6 +38,11 @@ class EmployeeResource extends JsonResource
             'full_name' => trim("{$employee->first_name} {$employee->last_name}"),
             'phone' => $employee->phone,
             'position' => $employee->position,
+            'position_id' => $employee->position_id,
+            'job_position' => $this->whenLoaded('jobPosition', fn () => $employee->jobPosition === null ? null : [
+                'id' => $employee->jobPosition->id,
+                'name' => $employee->jobPosition->name,
+            ]),
             'photo_url' => $employee->photo_attachment_id !== null
                 ? route('employees.photo.show', $employee)
                 : null,

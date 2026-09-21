@@ -18,6 +18,8 @@ type Employee = {
     last_name: string;
     phone?: string | null;
     position?: string | null;
+    position_id?: string | null;
+    job_position?: { id: string; name: string } | null;
     profession_skills?: string[];
     team?: { id: string } | null;
     supervisor?: { id: string } | null;
@@ -31,6 +33,7 @@ const props = defineProps<{
     employee?: Employee;
     teams: Option[];
     supervisors: Option[];
+    positions: Option[];
 }>();
 
 const form = useForm({
@@ -39,7 +42,7 @@ const form = useForm({
     last_name: props.employee?.last_name ?? '',
     phone: props.employee?.phone ?? '',
     personal_id_number: props.employee?.personal_id_number ?? '',
-    position: props.employee?.position ?? '',
+    position_id: props.employee?.position_id ?? props.employee?.job_position?.id ?? '',
     profession_skills_text: props.employee?.profession_skills?.join(', ') ?? '',
     profession_skills: [] as string[],
     team_id: props.employee?.team?.id ?? '',
@@ -58,6 +61,7 @@ function submit() {
             .filter(Boolean),
         team_id: form.team_id || null,
         supervisor_employee_id: form.supervisor_employee_id || null,
+        position_id: form.position_id || null,
     };
 
     form.transform(() => payload);
@@ -107,9 +111,22 @@ function submit() {
                 <InputError :message="form.errors.personal_id_number" />
             </div>
             <div class="grid gap-2">
-                <Label for="position">პოზიცია</Label>
-                <Input id="position" v-model="form.position" />
-                <InputError :message="form.errors.position" />
+                <Label for="position_id">პოზიცია</Label>
+                <select
+                    id="position_id"
+                    v-model="form.position_id"
+                    class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                >
+                    <option value="">პოზიციის გარეშე</option>
+                    <option v-for="position in positions" :key="position.id" :value="position.id">
+                        {{ position.name }}
+                    </option>
+                </select>
+                <p v-if="!positions.length" class="text-muted-foreground text-xs">
+                    დამატებული პოზიცია არ არის — დაამატეთ
+                    <a href="/positions" class="underline">პოზიციების გვერდზე</a>.
+                </p>
+                <InputError :message="form.errors.position_id" />
             </div>
             <div class="grid gap-2 md:col-span-2">
                 <Label for="profession_skills_text">უნარები</Label>

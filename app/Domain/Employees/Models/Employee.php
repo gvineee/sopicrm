@@ -45,6 +45,7 @@ class Employee extends Model
         'personal_id_number_encrypted',
         'photo_attachment_id',
         'position',
+        'position_id',
         'profession_skills',
         'team_id',
         'supervisor_employee_id',
@@ -68,6 +69,20 @@ class Employee extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Named `jobPosition`, not `position` — `position` is already a real
+     * database column (the legacy free-text field this relation
+     * supersedes), and Eloquent always resolves an existing attribute over
+     * a same-named relation, which would make a `position()` relation
+     * silently unreachable via `$employee->position`.
+     *
+     * @return BelongsTo<Position, $this>
+     */
+    public function jobPosition(): BelongsTo
+    {
+        return $this->belongsTo(Position::class, 'position_id');
     }
 
     /**

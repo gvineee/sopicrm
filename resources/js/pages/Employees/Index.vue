@@ -9,6 +9,7 @@ type Employee = {
     full_name: string;
     phone?: string | null;
     position?: string | null;
+    job_position?: { id: string; name: string } | null;
     status: string;
     team_name?: string | null;
 };
@@ -23,11 +24,17 @@ type PaginatedEmployees = {
 
 defineOptions({ layout: { mobileTitle: 'თანამშრომლები' } });
 
-defineProps<{
+const props = defineProps<{
     employees: PaginatedEmployees;
-    filters: { search?: string; status?: string; team_id?: string };
+    filters: { search?: string; status?: string; team_id?: string; position_id?: string; supervisor_employee_id?: string };
     teams: Array<{ id: string; name: string }>;
+    positions: Array<{ id: string; name: string }>;
+    supervisors: Array<{ id: string; first_name: string; last_name: string }>;
 }>();
+
+const hasActiveFilters = Boolean(
+    props.filters.search || props.filters.status || props.filters.team_id || props.filters.position_id || props.filters.supervisor_employee_id,
+);
 </script>
 
 <template>
@@ -50,12 +57,13 @@ defineProps<{
         <form
             method="get"
             action="/employees"
-            class="border-border bg-card grid gap-3 rounded-xl border p-4 md:grid-cols-3"
+            class="border-border bg-card grid gap-3 rounded-xl border p-4 md:grid-cols-5"
         >
             <Input
                 name="search"
                 :default-value="filters.search"
                 placeholder="სახელი ან შიდა კოდი"
+                class="md:col-span-2"
             />
             <select
                 name="status"
@@ -66,22 +74,43 @@ defineProps<{
                 <option value="active">აქტიური</option>
                 <option value="terminated">დასრულებული</option>
             </select>
-            <div class="flex gap-2">
+            <select
+                name="team_id"
+                :value="filters.team_id"
+                class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            >
+                <option value="">ყველა ბრიგადა</option>
+                <option
+                    v-for="team in teams"
+                    :key="team.id"
+                    :value="team.id"
+                >
+                    {{ team.name }}
+                </option>
+            </select>
+            <select
+                name="position_id"
+                :value="filters.position_id"
+                class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            >
+                <option value="">ყველა პოზიცია</option>
+                <option v-for="position in positions" :key="position.id" :value="position.id">
+                    {{ position.name }}
+                </option>
+            </select>
+            <div class="flex gap-2 md:col-span-5">
                 <select
-                    name="team_id"
-                    :value="filters.team_id"
+                    name="supervisor_employee_id"
+                    :value="filters.supervisor_employee_id"
                     class="border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm"
                 >
-                    <option value="">ყველა ბრიგადა</option>
-                    <option
-                        v-for="team in teams"
-                        :key="team.id"
-                        :value="team.id"
-                    >
-                        {{ team.name }}
+                    <option value="">ყველა ხელმძღვანელი</option>
+                    <option v-for="supervisor in supervisors" :key="supervisor.id" :value="supervisor.id">
+                        {{ supervisor.first_name }} {{ supervisor.last_name }}
                     </option>
                 </select>
                 <Button type="submit" variant="outline">ძიება</Button>
+                <Button v-if="hasActiveFilters" as-child variant="ghost"><Link href="/employees">გასუფთავება</Link></Button>
             </div>
         </form>
 
@@ -106,6 +135,7 @@ defineProps<{
                         <p class="text-muted-foreground text-sm">
                             {{ employee.internal_code }} ·
                             {{
+                                employee.job_position?.name ||
                                 employee.position ||
                                 'პოზიცია არ არის მითითებული'
                             }}

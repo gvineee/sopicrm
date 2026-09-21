@@ -21,7 +21,7 @@ class CreateEmployeeAction
     public function __construct(private readonly AuditLogger $auditLogger) {}
 
     /**
-     * @param  array{internal_code: string, first_name: string, last_name: string, phone?: string|null, personal_id_number?: string|null, photo_attachment_id?: string|null, position?: string|null, profession_skills?: array<int, string>|null, team_id?: string|null, supervisor_employee_id?: string|null, emergency_contact_name?: string|null, emergency_contact_phone?: string|null, employment_started_at: string}  $data
+     * @param  array{internal_code: string, first_name: string, last_name: string, phone?: string|null, personal_id_number?: string|null, photo_attachment_id?: string|null, position?: string|null, position_id?: string|null, profession_skills?: array<int, string>|null, team_id?: string|null, supervisor_employee_id?: string|null, emergency_contact_name?: string|null, emergency_contact_phone?: string|null, employment_started_at: string}  $data
      */
     public function execute(array $data, User $actor): Employee
     {
@@ -34,6 +34,7 @@ class CreateEmployeeAction
                 'personal_id_number_encrypted' => $data['personal_id_number'] ?? null,
                 'photo_attachment_id' => $data['photo_attachment_id'] ?? null,
                 'position' => $data['position'] ?? null,
+                'position_id' => $data['position_id'] ?? null,
                 'profession_skills' => $data['profession_skills'] ?? null,
                 'team_id' => $data['team_id'] ?? null,
                 'supervisor_employee_id' => $data['supervisor_employee_id'] ?? null,

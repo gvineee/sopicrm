@@ -8,10 +8,12 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Employees\Models\EmployeeInvite;
 use App\Domain\Employees\Models\EmployeeProjectAssignment;
 use App\Domain\Employees\Models\Employment;
+use App\Domain\Employees\Models\Position;
 use App\Domain\Employees\Models\RateHistory;
 use App\Domain\Employees\Models\Team;
 use App\Domain\Projects\Models\Project;
 use App\Domain\Shared\Models\Attachment;
+use App\Domain\Shared\Services\PortableSearch;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Employees\StoreEmployeeRequest;
 use App\Http\Requests\Employees\UpdateEmployeeRequest;
@@ -42,18 +44,23 @@ class EmployeeController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = $request->query('status');
         $teamId = $request->query('team_id');
+        $positionId = $request->query('position_id');
+        $supervisorId = $request->query('supervisor_employee_id');
 
         $employees = Employee::query()
-            ->with(['team'])
+            ->with(['team', 'jobPosition'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($inner) use ($search) {
-                    $inner->where('internal_code', 'ilike', "%{$search}%")
-                        ->orWhere('first_name', 'ilike', "%{$search}%")
-                        ->orWhere('last_name', 'ilike', "%{$search}%");
+                    $like = "%{$search}%";
+                    PortableSearch::where($inner, 'internal_code', $like);
+                    PortableSearch::orWhere($inner, 'first_name', $like);
+                    PortableSearch::orWhere($inner, 'last_name', $like);
                 });
             })
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($teamId, fn ($query) => $query->where('team_id', $teamId))
+            ->when($positionId, fn ($query) => $query->where('position_id', $positionId))
+            ->when($supervisorId, fn ($query) => $query->where('supervisor_employee_id', $supervisorId))
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->paginate(20)
@@ -69,8 +76,12 @@ class EmployeeController extends Controller
                 'search' => $search,
                 'status' => $status,
                 'team_id' => $teamId,
+                'position_id' => $positionId,
+                'supervisor_employee_id' => $supervisorId,
             ],
             'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'positions' => Position::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'supervisors' => Employee::query()->where('status', 'active')->orderBy('last_name')->get(['id', 'first_name', 'last_name']),
         ]);
     }
 
@@ -81,6 +92,7 @@ class EmployeeController extends Controller
         return Inertia::render('Employees/Create', [
             'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'supervisors' => Employee::query()->where('status', 'active')->orderBy('last_name')->get(['id', 'first_name', 'last_name']),
+            'positions' => Position::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -100,7 +112,7 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
 
-        $employee->load(['team', 'supervisor', 'employments' => fn ($query) => $query->orderByDesc('started_at')]);
+        $employee->load(['team', 'jobPosition', 'supervisor', 'employments' => fn ($query) => $query->orderByDesc('started_at')]);
 
         $canViewRates = $request->user()->can('viewAny', [RateHistory::class, $employee->id]);
         $canManageRates = $request->user()->can('create', RateHistory::class);
@@ -164,11 +176,12 @@ class EmployeeController extends Controller
     public function edit(Request $request, Employee $employee): Response
     {
         $this->authorize('update', $employee);
-        $employee->load(['team', 'supervisor']);
+        $employee->load(['team', 'jobPosition', 'supervisor']);
 
         return Inertia::render('Employees/Edit', [
             'employee' => (new EmployeeResource($employee))->resolve($request),
             'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'positions' => Position::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'supervisors' => Employee::query()
                 ->where('status', 'active')
                 ->where('id', '!=', $employee->id)

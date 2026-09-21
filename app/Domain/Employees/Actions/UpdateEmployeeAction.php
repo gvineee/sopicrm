@@ -24,7 +24,7 @@ class UpdateEmployeeAction
     {
         $allowed = array_intersect_key($data, array_flip([
             'first_name', 'last_name', 'phone', 'personal_id_number',
-            'photo_attachment_id', 'position', 'profession_skills',
+            'photo_attachment_id', 'position', 'position_id', 'profession_skills',
             'team_id', 'supervisor_employee_id',
             'emergency_contact_name', 'emergency_contact_phone',
         ]));

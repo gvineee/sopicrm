@@ -3,9 +3,11 @@
 namespace App\Providers\Employees;
 
 use App\Domain\Employees\Models\Employee;
+use App\Domain\Employees\Models\Position;
 use App\Domain\Employees\Models\RateHistory;
 use App\Domain\Employees\Models\Team;
 use App\Policies\EmployeePolicy;
+use App\Policies\PositionPolicy;
 use App\Policies\RateHistoryPolicy;
 use App\Policies\TeamPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -25,6 +27,7 @@ class EmployeesModuleServiceProvider extends ServiceProvider
      */
     protected $policies = [
         Employee::class => EmployeePolicy::class,
+        Position::class => PositionPolicy::class,
         RateHistory::class => RateHistoryPolicy::class,
         Team::class => TeamPolicy::class,
     ];

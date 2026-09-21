@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Employees;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateEmployeeRequest extends FormRequest
 {
@@ -23,6 +24,7 @@ class UpdateEmployeeRequest extends FormRequest
             'personal_id_number' => ['nullable', 'string', 'max:50'],
             'photo_attachment_id' => ['nullable', 'uuid'],
             'position' => ['nullable', 'string', 'max:255'],
+            'position_id' => ['nullable', 'uuid', Rule::exists('positions', 'id')->where('organization_id', $this->user()->organization_id)],
             'profession_skills' => ['nullable', 'array'],
             'profession_skills.*' => ['string', 'max:100'],
             'team_id' => ['nullable', 'uuid', 'exists:teams,id'],
