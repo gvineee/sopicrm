@@ -23,6 +23,7 @@ class ApiPrincipal
                 'type' => 'user',
                 'id' => $principal->getKey(),
                 'organizationId' => $principal->current_organization_id,
+                'companyId' => $principal->current_company_id,
             ];
         }
 

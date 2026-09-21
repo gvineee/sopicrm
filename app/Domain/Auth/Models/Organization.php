@@ -2,6 +2,7 @@
 
 namespace App\Domain\Auth\Models;
 
+use App\Domain\Companies\Models\Company;
 use App\Models\User;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -77,6 +78,14 @@ class Organization extends Model implements Authenticatable
     public function memberships(): HasMany
     {
         return $this->hasMany(Membership::class);
+    }
+
+    /**
+     * @return HasMany<Company, $this>
+     */
+    public function companies(): HasMany
+    {
+        return $this->hasMany(Company::class);
     }
 
     // --- Illuminate\Contracts\Auth\Authenticatable ---------------------

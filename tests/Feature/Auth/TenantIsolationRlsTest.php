@@ -2,11 +2,15 @@
 
 use App\Domain\Auth\Models\Organization;
 use App\Domain\Projects\Models\Project;
+use App\Domain\Shared\Events\OutboxEventReady;
+use App\Jobs\Shared\ProcessOutboxEventJob;
 use App\Models\User;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
 /**
@@ -238,4 +242,96 @@ test('memberships, project_memberships, audit_events, outbox_events and idempote
     expect(rlsConnection()->table('audit_events')->count())->toBe(0);
     expect(rlsConnection()->table('outbox_events')->count())->toBe(0);
     expect(rlsConnection()->table('idempotency_records')->count())->toBe(0);
+});
+
+test('QUEUE-01: the real outbox relay and job process tenant A then tenant B correctly under a real restricted role, with no context leak and no double-processing', function () {
+    $originalDefault = config('database.default');
+
+    try {
+        setRlsOrg($this->tenantA->id);
+        $eventA = (string) Str::uuid7();
+        rlsConnection()->table('outbox_events')->insert([
+            'id' => $eventA,
+            'organization_id' => $this->tenantA->id,
+            'event_type' => 'test.probe',
+            'subject_type' => 'organization',
+            'subject_id' => $this->tenantA->id,
+            'payload' => '{}',
+            'available_at' => now(),
+            'attempts' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        setRlsOrg($this->tenantB->id);
+        $eventB = (string) Str::uuid7();
+        rlsConnection()->table('outbox_events')->insert([
+            'id' => $eventB,
+            'organization_id' => $this->tenantB->id,
+            'event_type' => 'test.probe',
+            'subject_type' => 'organization',
+            'subject_id' => $this->tenantB->id,
+            'payload' => '{}',
+            'available_at' => now(),
+            'attempts' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Real production ambient state for a cron relay / queue worker
+        // process: no `app.current_org_id` is ever set for it — this is
+        // exactly the condition that made the pre-QUEUE-01 code see zero
+        // rows, always, under a real restricted role.
+        clearRlsOrg();
+        config(['database.default' => 'pgsql_rls_test']);
+
+        Event::fake([OutboxEventReady::class]);
+        Queue::fake();
+
+        Artisan::call('outbox:relay');
+
+        // Other tests in this same shared, non-transactional real Postgres
+        // database may have left their own unprocessed outbox rows behind
+        // (this suite migrates the DB fresh once per run for speed, not
+        // once per test) — assert this relay pass found (at least) both of
+        // this test's own rows, not that it found ONLY them.
+        $dispatchedIds = collect(Queue::pushed(ProcessOutboxEventJob::class))
+            ->map(fn ($job) => $job->outboxEventId)
+            ->all();
+        expect($dispatchedIds)->toContain($eventA)->toContain($eventB);
+
+        // Run both jobs for real, back to back, on what is effectively the
+        // same long-lived worker process/connection — proves context from
+        // processing tenant A does not leak into tenant B's run.
+        (new ProcessOutboxEventJob($eventA))->handle();
+        (new ProcessOutboxEventJob($eventB))->handle();
+
+        Event::assertDispatched(OutboxEventReady::class, fn (OutboxEventReady $event) => $event->organizationId === $this->tenantA->id);
+        Event::assertDispatched(OutboxEventReady::class, fn (OutboxEventReady $event) => $event->organizationId === $this->tenantB->id);
+        Event::assertDispatchedTimes(OutboxEventReady::class, 2);
+
+        // A crash/retry (re-delivery of the same job) must never double-process.
+        (new ProcessOutboxEventJob($eventA))->handle();
+        Event::assertDispatchedTimes(OutboxEventReady::class, 2);
+
+        setRlsOrg($this->tenantA->id);
+        expect(rlsConnection()->table('outbox_events')->where('id', $eventA)->value('processed_at'))->not->toBeNull();
+        // Tenant A's session still can't see tenant B's row — isolation
+        // held throughout, the relay flag never leaked into ordinary reads.
+        expect(rlsConnection()->table('outbox_events')->where('id', $eventB)->exists())->toBeFalse();
+
+        setRlsOrg($this->tenantB->id);
+        expect(rlsConnection()->table('outbox_events')->where('id', $eventB)->value('processed_at'))->not->toBeNull();
+
+        // Both the tenant-scoping GUC and the cross-tenant escape hatch are
+        // transaction-scoped (`is_local=true`) — neither should still be
+        // set on this session now that every transaction has committed.
+        clearRlsOrg();
+        $leakedOrgId = rlsConnection()->selectOne("select current_setting('app.current_org_id', true) as v")->v;
+        $leakedRelayFlag = rlsConnection()->selectOne("select current_setting('app.outbox_relay_active', true) as v")->v;
+        expect($leakedOrgId)->toBeEmpty()
+            ->and($leakedRelayFlag)->toBeEmpty();
+    } finally {
+        config(['database.default' => $originalDefault]);
+    }
 });

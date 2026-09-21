@@ -2,11 +2,16 @@
 
 namespace Database\Seeders;
 
+use Database\Seeders\Modules\AttendancePermissionsSeeder;
 use Database\Seeders\Modules\AuthPermissionsSeeder;
+use Database\Seeders\Modules\ContractorsPermissionsSeeder;
 use Database\Seeders\Modules\DailyJournalPermissionsSeeder;
 use Database\Seeders\Modules\DevicesPermissionsSeeder;
 use Database\Seeders\Modules\EmployeesPermissionsSeeder;
+use Database\Seeders\Modules\PayrollPermissionsSeeder;
 use Database\Seeders\Modules\ProjectsPermissionsSeeder;
+use Database\Seeders\Modules\TasksPermissionsSeeder;
+use Database\Seeders\Modules\TimesheetsPermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -37,6 +42,18 @@ class AggregatingPermissionsSeeder extends Seeder
         EmployeesPermissionsSeeder::class,
         DevicesPermissionsSeeder::class,
         ProjectsPermissionsSeeder::class,
+        TasksPermissionsSeeder::class,
+        // Depends on Employees (contractors are an alternative to an
+        // Employee performer) and Projects/Tasks (assignment targets) all
+        // already having run — no permission-name collisions, ordered last.
+        ContractorsPermissionsSeeder::class,
+        // Depends on Devices (RawAccessEvent) and Employees having run —
+        // no permission-name collisions, ordered last.
+        AttendancePermissionsSeeder::class,
+        // Depends on Attendance (AttendanceSession/AttendanceAdjustment).
+        TimesheetsPermissionsSeeder::class,
+        // Depends on Timesheets (PayRun calculation reads Timesheet data).
+        PayrollPermissionsSeeder::class,
     ];
 
     public function run(): void

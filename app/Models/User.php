@@ -6,6 +6,8 @@ namespace App\Models;
 use App\Domain\Auth\Models\Membership;
 use App\Domain\Auth\Models\Organization;
 use App\Domain\Auth\Models\ProjectMembership;
+use App\Domain\Companies\Models\Company;
+use App\Domain\Companies\Models\CompanyMembership;
 use App\Domain\Shared\Concerns\HasVersion;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -49,10 +51,12 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string $id
  * @property string $organization_id
  * @property string $current_organization_id
+ * @property string|null $current_company_id
  * @property string $name
  * @property string $email
  * @property string|null $phone
  * @property bool $is_active
+ * @property bool $is_platform_admin
  * @property Carbon|null $last_login_at
  * @property Carbon|null $email_verified_at
  * @property string $password
@@ -63,6 +67,9 @@ use Spatie\Permission\Traits\HasRoles;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
+// `is_platform_admin` (ADMIN-01) is deliberately excluded here — it must
+// only ever be set via App\Domain\Auth\Actions\GrantPlatformAdminAction,
+// never through any ordinary profile/user-update form's mass assignment.
 #[Fillable(['name', 'email', 'password', 'phone', 'is_active'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'mfa_secret_encrypted', 'personal_id_number_encrypted'])]
 class User extends Authenticatable implements PasskeyUser
@@ -86,6 +93,7 @@ class User extends Authenticatable implements PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_platform_admin' => 'boolean',
             'last_login_at' => 'datetime',
             'personal_id_number_encrypted' => 'encrypted',
             'mfa_secret_encrypted' => 'encrypted',
@@ -109,6 +117,14 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * @return BelongsTo<Company, $this>
+     */
+    public function currentCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'current_company_id');
+    }
+
+    /**
      * @return HasMany<Membership, $this>
      */
     public function memberships(): HasMany
@@ -122,6 +138,19 @@ class User extends Authenticatable implements PasskeyUser
     public function projectMemberships(): HasMany
     {
         return $this->hasMany(ProjectMembership::class);
+    }
+
+    /**
+     * @return HasMany<CompanyMembership, $this>
+     */
+    public function companyMemberships(): HasMany
+    {
+        return $this->hasMany(CompanyMembership::class);
+    }
+
+    public function isActiveMemberOfCompany(string $companyId): bool
+    {
+        return $this->companyMemberships()->where('company_id', $companyId)->exists();
     }
 
     /**

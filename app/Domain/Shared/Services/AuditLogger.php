@@ -5,6 +5,7 @@ namespace App\Domain\Shared\Services;
 use App\Domain\Shared\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request as RequestFacade;
 use Illuminate\Support\Str;
 
@@ -60,12 +61,27 @@ class AuditLogger
         $actor ??= auth()->user() instanceof User ? auth()->user() : null;
 
         // Explicit override exists for the narrow case of authentication
-        // events themselves (App\Domain\Auth\Listeners\LogAuthenticationEvent):
-        // login/logout/failed-login happen on the SAME request that
+        // events themselves (App\Domain\Auth\Listeners\LogAuthenticationEvent)
+        // and pre-login invite acceptance (App\Domain\Employees\Actions\
+        // AcceptEmployeeInviteAction): these happen on the SAME request that
         // establishes tenant context, before App\Http\Middleware\SetCurrentOrganization
         // has had a chance to run (it needs $request->user(), which doesn't
         // exist yet), so there's nothing in CurrentOrganization to fall back
-        // to and the caller passes the user's own organization_id directly.
+        // to and the caller passes the target's own organization_id directly.
+        //
+        // withoutTenantScope() below only skips Eloquent's own WHERE clause —
+        // it does nothing to Postgres's row-level security, which is enforced
+        // independently at the database level against the `app.current_org_id`
+        // session GUC that SetCurrentOrganization normally sets. Without the
+        // middleware having run yet, that GUC is still unset/stale here, so
+        // the INSERT would violate RLS even though `organization_id` on the
+        // row itself is correct. Set the GUC explicitly in this override case
+        // so both enforcement layers agree — same pattern already used by
+        // Database\Seeders\DatabaseSeeder.
+        if ($organizationId !== null && DB::connection()->getDriverName() === 'pgsql') {
+            DB::statement("select set_config('app.current_org_id', ?, false)", [$organizationId]);
+        }
+
         return AuditEvent::withoutTenantScope()->create([
             'organization_id' => $organizationId ?? CurrentOrganization::requireId(),
             'actor_user_id' => $actor?->getKey(),

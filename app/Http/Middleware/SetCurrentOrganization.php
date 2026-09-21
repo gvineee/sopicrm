@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Domain\Auth\Models\Organization;
+use App\Domain\Shared\Services\CurrentCompany;
 use App\Domain\Shared\Services\CurrentOrganization;
 use App\Models\User;
 use Closure;
@@ -42,6 +43,7 @@ class SetCurrentOrganization
         $organizationId = $this->resolveOrganizationId($request);
 
         CurrentOrganization::set($organizationId);
+        CurrentCompany::set($this->resolveCompanyId($request, $organizationId));
 
         if ($organizationId !== null) {
             app(PermissionRegistrar::class)->setPermissionsTeamId($organizationId);
@@ -73,6 +75,7 @@ class SetCurrentOrganization
     private function reset(): void
     {
         CurrentOrganization::clear();
+        CurrentCompany::clear();
 
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement("select set_config('app.current_org_id', '', false)");
@@ -95,10 +98,28 @@ class SetCurrentOrganization
         return $this->organizationIdForPrincipal($request->user());
     }
 
+    private function resolveCompanyId(Request $request, ?string $organizationId): ?string
+    {
+        $principal = $request->user();
+
+        if (! $principal instanceof User || $organizationId === null) {
+            return null;
+        }
+
+        return $principal->organization_id === $organizationId
+            ? $principal->current_company_id
+            : null;
+    }
+
     private function organizationIdForPrincipal(?object $authenticatable): ?string
     {
         if ($authenticatable instanceof User) {
-            return $authenticatable->current_organization_id;
+            // Older sessions/users may not have current_organization_id set
+            // yet. Their immutable organization_id is the safe fallback;
+            // both values are server-side fields and never client supplied.
+            return filled($authenticatable->current_organization_id)
+                ? $authenticatable->current_organization_id
+                : $authenticatable->organization_id;
         }
 
         if ($authenticatable instanceof Organization) {

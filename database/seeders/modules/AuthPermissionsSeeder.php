@@ -33,6 +33,8 @@ class AuthPermissionsSeeder extends Seeder
             'audit.events.view',
             'audit.events.export',
             'projects.memberships.manage',
+            'companies.view',
+            'companies.manage',
             // Not a real financial-domain permission yet (Payroll/Finance
             // modules are out of this pass's scope) — a minimal stand-in
             // used to prove, at the Policy/Gate layer, the spec's explicit
@@ -51,10 +53,12 @@ class AuthPermissionsSeeder extends Seeder
                 'auth.users.view', 'auth.users.manage', 'auth.roles.assign',
                 'auth.tokens.issue-machine', 'audit.events.view', 'audit.events.export',
                 'projects.memberships.manage', 'finance.access',
+                'companies.view', 'companies.manage',
             ],
             'system_admin' => [
                 'auth.users.view', 'auth.users.manage', 'auth.roles.assign',
                 'auth.tokens.issue-machine', 'audit.events.view',
+                'companies.view', 'companies.manage',
                 // deliberately NOT 'finance.access', NOT 'audit.events.export'
             ],
             'hr' => ['auth.users.view'],

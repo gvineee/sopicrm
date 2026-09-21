@@ -3,6 +3,9 @@
 namespace Database\Seeders;
 
 use App\Domain\Auth\Models\Organization;
+use App\Domain\Companies\Models\Company;
+use App\Domain\Companies\Models\CompanyMembership;
+use App\Domain\Shared\Services\CurrentCompany;
 use App\Domain\Shared\Services\CurrentOrganization;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -42,14 +45,29 @@ class DatabaseSeeder extends Seeder
             DB::statement("select set_config('app.current_org_id', ?, false)", [$organization->id]);
         }
 
+        $company = Company::factory()->create([
+            'organization_id' => $organization->id,
+            'name' => 'ODA Demo',
+            'code' => 'DEFAULT',
+        ]);
+        CurrentCompany::set($company->id);
+
         $user = User::factory()->create([
             'organization_id' => $organization->id,
             'current_organization_id' => $organization->id,
+            'current_company_id' => $company->id,
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
 
         $user->assignRole('owner');
+
+        CompanyMembership::factory()->create([
+            'organization_id' => $organization->id,
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'is_primary' => true,
+        ]);
 
         // P0+P1 schema pass demo data (Employees/Devices/Attendance/
         // Payroll/Assets/Projects&Tasks) — dev/CI convenience only, never
@@ -58,6 +76,7 @@ class DatabaseSeeder extends Seeder
         $this->call(DevP1DemoSeeder::class);
 
         CurrentOrganization::clear();
+        CurrentCompany::clear();
 
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement("select set_config('app.current_org_id', '', false)");

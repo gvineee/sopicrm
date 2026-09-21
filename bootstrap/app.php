@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The app is commonly served behind Cloudflare Tunnel/Nginx. Trust the
+        // forwarded scheme so URL and asset generation follows the browser's
+        // HTTPS request while local development remains HTTP-friendly.
+        $middleware->trustProxies(at: '*');
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
