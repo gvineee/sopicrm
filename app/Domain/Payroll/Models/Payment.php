@@ -6,6 +6,7 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Domain\Shared\Models\Attachment;
+use Carbon\CarbonInterface;
 use Database\Factories\PaymentFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * only the spec): this system never sends a real payment — rows here are a
  * record-keeping ledger of payments made through an external process.
  */
+/** @property CarbonInterface $paid_at */
 class Payment extends Model
 {
     /** @use HasFactory<PaymentFactory> */
@@ -37,6 +39,7 @@ class Payment extends Model
         'currency',
         'method',
         'reference',
+        'request_id',
         'evidence_attachment_id',
         'status',
     ];

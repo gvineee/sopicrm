@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Models;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\PayRunFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * this run, since policy is config and the version used must never be
  * assumed from "whatever config is active today."
  */
-/** @property array<string, mixed>|null $policy_version_snapshot */
+/**
+ * @property array<string, mixed>|null $policy_version_snapshot
+ * @property CarbonInterface|null $calculated_at
+ * @property CarbonInterface|null $approved_at
+ */
 class PayRun extends Model
 {
     /** @use HasFactory<PayRunFactory> */

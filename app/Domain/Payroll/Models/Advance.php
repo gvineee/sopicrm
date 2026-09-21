@@ -6,6 +6,7 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\AdvanceFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * payment_allocations ledger pattern, never a second independent "deduct
  * advance" mutation on this row itself.
  */
+/** @property CarbonInterface $granted_at */
 class Advance extends Model
 {
     /** @use HasFactory<AdvanceFactory> */
