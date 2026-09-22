@@ -22,6 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/', [PayRunController::class, 'index'])->name('index');
         Route::post('/', [PayRunController::class, 'store'])->name('store');
         Route::get('/{payRun}', [PayRunController::class, 'show'])->name('show');
+        Route::get('/{payRun}/export-csv', [PayRunController::class, 'exportCsv'])->name('export-csv');
         Route::post('/{payRun}/calculate', [PayRunController::class, 'calculate'])->name('calculate');
         Route::post('/{payRun}/review', [PayRunController::class, 'review'])->name('review');
         Route::post('/{payRun}/approve', [PayRunController::class, 'approve'])->name('approve');

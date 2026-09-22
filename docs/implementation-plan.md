@@ -142,10 +142,10 @@ REQ-DEV-16 has passed end-to-end against the simulator, including duplicate outa
 | REQ-PAY-09 | Outstanding balance formula: approved amount − allocated payments − allocated advances; advance deducted exactly once | P1 | done |
 | REQ-PAY-10 | Deduction for damaged tools/fines/debt requires separate permission, reason, and approved company rule — never automatic | P1 | done |
 | REQ-PAY-11 | Locked-period correction via reversal/adjustment row, never delete/edit | P1 | done |
-| REQ-PAY-12 | Payroll CSV export (period, employee, hours, days, accrual, advance, paid, balance) hardened against spreadsheet formula injection | P1 | not-started |
-| REQ-PAY-13 | CSV export UI copy makes clear it is not a real bank transfer | P1 | not-started |
+| REQ-PAY-12 | Payroll CSV export (period, employee, hours, days, accrual, advance, paid, balance) hardened against spreadsheet formula injection | P1 | done |
+| REQ-PAY-13 | CSV export UI copy makes clear it is not a real bank transfer | P1 | done |
 | REQ-PAY-14 | Payroll module Policies (Finance role; system admin has no automatic financial access; PM cannot pull payroll export without explicit permission) | P1 | done |
-| REQ-PAY-15 | Pest tests matching spec §23 payroll rows: 480 min × 15 GEL/hr = 120.00 GEL; 1 approved day × 100 GEL = 100.00 GEL; salary 1000, advance 200, payment 300 → balance 500, advance not double-deducted; PM without permission requesting payroll export/API → denied | P1 | done (except the export-permission-denial row, which needs REQ-PAY-12 first) |
+| REQ-PAY-15 | Pest tests matching spec §23 payroll rows: 480 min × 15 GEL/hr = 120.00 GEL; 1 approved day × 100 GEL = 100.00 GEL; salary 1000, advance 200, payment 300 → balance 500, advance not double-deducted; PM without permission requesting payroll export/API → denied | P1 | done |
 
 ## REQ-AST — Tools, Assets & Custody (spec §9)
 

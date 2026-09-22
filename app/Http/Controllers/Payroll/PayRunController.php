@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Payroll;
 use App\Domain\Payroll\Actions\ApprovePayRunAction;
 use App\Domain\Payroll\Actions\CalculatePayRunAction;
 use App\Domain\Payroll\Actions\CreatePayRunAction;
+use App\Domain\Payroll\Actions\ExportPayRunCsvAction;
 use App\Domain\Payroll\Actions\LockPayRunAction;
 use App\Domain\Payroll\Actions\ReviewPayRunAction;
 use App\Domain\Payroll\Models\PayPeriod;
@@ -16,6 +17,7 @@ use App\Http\Resources\Payroll\PayRunResource;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -69,6 +71,26 @@ class PayRunController extends Controller
             'canReview' => auth()->user()?->can('review', $payRun) ?? false,
             'canApprove' => auth()->user()?->can('approve', $payRun) ?? false,
             'canLock' => auth()->user()?->can('lock', $payRun) ?? false,
+        ]);
+    }
+
+    /**
+     * REQ-PAY-12/13: a real, protected CSV download — same `view` ability
+     * the pay run's own detail page already requires, never a separate,
+     * looser check. A genuine attachment (not inline): this is tabular
+     * accounting data meant to be opened in a spreadsheet application, not
+     * previewed in-browser, unlike this session's PDF/photo-preview work
+     * elsewhere, which is inline on purpose for different content.
+     */
+    public function exportCsv(PayRun $payRun, ExportPayRunCsvAction $action): HttpResponse
+    {
+        $this->authorize('view', $payRun);
+
+        $csv = $action->execute($payRun);
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="pay-run-'.$payRun->id.'.csv"',
         ]);
     }
 

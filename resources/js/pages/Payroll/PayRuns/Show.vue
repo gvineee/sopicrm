@@ -56,6 +56,19 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
             <p class="text-muted-foreground text-sm">სულ: {{ payRun.total_net_amount ?? '0.00' }} GEL</p>
         </div>
 
+        <div class="border-border bg-muted/30 flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-muted-foreground text-xs">
+                CSV არის ჩანაწერი საბუღალტრო/აღრიცხვის მიზნებისთვის — ის <strong>არ წარმოადგენს საბანკო გადარიცხვას</strong> და არ ინიცირებს
+                გადახდას.
+            </p>
+            <a
+                :href="`/payroll/pay-runs/${payRun.id}/export-csv`"
+                class="border-border bg-background hover:bg-muted inline-flex shrink-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium"
+            >
+                CSV გადმოწერა
+            </a>
+        </div>
+
         <div class="border-border bg-card overflow-hidden rounded-xl border">
             <table class="w-full text-sm">
                 <thead class="bg-muted/50 text-muted-foreground text-left">

@@ -805,3 +805,25 @@ Baseline before this session's changes: 144 tests (142 passed / 2 skipped, 686 a
 **Note on the shared working tree:** a concurrent process was mid-edit on `NavigationService.php`/`AppSidebar.vue`/mobile-nav files throughout this task, and a separate parallel session was finishing FILES-01's Contractor-evidence remainder at the same time (see the entry above) — both left completely untouched, per this file's own no-interference protocol.
 
 **Next:** as of this entry, no other genuinely buildable ticket remains open in `docs/claude-overnight-goal.md`'s backlog. What's left: BIO-03/BIO-04 remainders (blocked on real BioStar API access — no live server or current API docs available to any session so far), OPS-01 execution (blocked on a real hosting/VPS decision only the user can make). Both require an external unblock, not more implementation time.
+
+---
+
+## Completed: REQ-PAY-12/13 (hardened Payroll CSV export)
+
+**Status:** done, verified.
+
+**Scope:** the two remaining `not-started` rows in the Payroll module (spec §8) — CSV export (period, employee, hours, days, accrual, advance, paid, balance) hardened against spreadsheet-formula injection, and UI copy making clear the export is not a bank transfer.
+
+**The hard security requirement, proven not assumed:** a CSV cell starting with `=`/`+`/`-`/`@` is interpreted as a formula by Excel/Sheets/LibreOffice on open — a real, OWASP-documented vulnerability class. New `App\Domain\Payroll\Support\CsvFormulaGuard::sanitize()` prefixes a defensive leading `'` on any such value before it's written. A dedicated test names an employee literally `=cmd|'/c calc'!A1` and asserts the exported cell carries the defensive prefix, never the raw formula string unescaped.
+
+**What was built:** `App\Domain\Payroll\Actions\ExportPayRunCsvAction` — one CSV row per employee in a `PayRun`: period (from `PayPeriod`), employee name (sanitized), hours (`PayRunLine.basis='hourly'` quantities summed), days (`basis='daily'`), accrual (this run's own `net_amount` sum), advance (deducted against this specific run via `PaymentAllocation.allocation_type='advance_deduction'`), paid (real `status='completed'` `Payment` rows against this run only — a `pending` payment never counts, per `Payment`'s own pre-existing hard rule), balance (`PayrollBalanceService::outstandingForEmployee()` — the same trusted computation every other Payroll screen already uses, never a second parallel one). UTF-8 BOM prefixed so Georgian text renders correctly when opened in Excel on Windows. New `GET payroll/pay-runs/{payRun}/export-csv` route + `PayRunController::exportCsv()`, gated on the pay run's existing `view` Policy ability (no new permission). A real attachment download (not inline) — the one place in this session's file-serving work where that's the correct disposition, since this is tabular data for a spreadsheet app, not previewable content. `Payroll/PayRuns/Show.vue` gained a download button with adjacent Georgian copy stating plainly this is an accounting record, not a bank transfer.
+
+**Files changed:** new `app/Domain/Payroll/Support/CsvFormulaGuard.php`, `app/Domain/Payroll/Actions/ExportPayRunCsvAction.php`; `app/Http/Controllers/Payroll/PayRunController.php` (+`exportCsv()`); `routes/modules/web-payroll.php` (+1 route); `resources/js/pages/Payroll/PayRuns/Show.vue`; new `tests/Feature/Payroll/PayRunCsvExportTest.php` (4 tests). Also corrected `docs/implementation-plan.md`'s REQ-TSK-03 status: the previous documentation-audit pass missed that self-close-for-low-risk-tasks (`Task.self_close_allowed`, `TaskPolicy::acceptSubmission()`'s carve-out, the Create/Edit UI checkbox) already existed fully wired — verified directly against the real code before correcting the row from `in-progress` to `done`.
+
+**Contract/schema changes:** none — no migration.
+
+**Tests/gates:** `php artisan test --compact` → **307 passed / 3 skipped** (1533 assertions; whole shared worktree, including a concurrent sibling session's own Assets-reports tests — a stale Vite manifest for their new page was cleared by running `npm run build` once, which benefited both passes). `phpstan analyse` (scoped to Payroll) → 0 errors (one real fix: `fopen()`'s `resource|false` return was used without a false-check). `pint --test` (scoped to Payroll) → clean. `npm run types:check` / `npm run build` → passed.
+
+**A real bug caught by PHPStan, not cosmetic:** `fopen('php://temp', 'r+')` can return `false` on a genuine stream-allocation failure; the original code passed that possibly-`false` value straight into `fwrite`/`fputcsv`/etc. Fixed with an explicit check that throws a real exception instead, rather than a type-widening workaround.
+
+**Next:** as of this entry, no other genuinely buildable ticket remains open in `docs/claude-overnight-goal.md`'s backlog beyond whatever a concurrent sibling session (Assets reports, REQ-AST-10) is independently finishing. BIO-03/BIO-04 and OPS-01 live execution remain blocked on external dependencies only the user can resolve.
