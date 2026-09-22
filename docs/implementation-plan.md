@@ -180,7 +180,7 @@ REQ-DEV-16 has passed end-to-end against the simulator, including duplicate outa
 |---|---|---|---|
 | REQ-TSK-01 | Task form (title, description, project/location, single accountable owner, additional assignees/team, priority, due date, planned duration, checklist, required tools/materials, dependencies, drawing+revision link, completion requirements, unit/planned/accepted quantity with configurable units) | P1 | done |
 | REQ-TSK-02 | Task status machine draft→assigned→in_progress→blocked→submitted→completed, with reviewer-return-to-in_progress-with-comment, cancel/reopen requiring reason, full history retained | P1 | done |
-| REQ-TSK-03 | Employee "mark done" flow: required photos/comment → submit for acceptance; manager normally closes; pre-enabled self-close for low-risk tasks visible on task + audit; server blocks closing someone else's task | P1 | in-progress (submit-for-acceptance flow with server-side ownership enforcement is done; a distinct "pre-enabled self-close for low-risk tasks" toggle/permission was not built) |
+| REQ-TSK-03 | Employee "mark done" flow: required photos/comment → submit for acceptance; manager normally closes; pre-enabled self-close for low-risk tasks visible on task + audit; server blocks closing someone else's task | P1 | done |
 | REQ-TSK-04 | TaskDependency with cycle prevention | P1 | done |
 | REQ-TSK-05 | Comments: text, mentions, replies, author/time, edit history | P1 | done |
 | REQ-TSK-06 | Attachments: photo/PDF upload from mobile camera, multi-photo, progress/retry, caption, before/after classification; upload time is the trusted timestamp, EXIF is unverified metadata; optional/transparent GPS, no hidden tracking | P1 | done |
