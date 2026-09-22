@@ -2,6 +2,20 @@
 
 Live checkpoint file. Update after every bounded task per `docs/claude-overnight-goal.md`'s execution loop. Newest entry on top.
 
+## Completed: PWA offline-queue remainder — task-list cache, quota handling, queue bound (REQ-NTF-04/05/09)
+
+**Status:** done, verified. See `docs/agent-handoff.md`'s matching entry for full detail — summarized here.
+
+Closes the three specific PWA gaps this session's own `implementation-plan.md` audit left `in-progress`: a bounded, read-only local task-list snapshot in a new IndexedDB store (`task_list_cache`, DB version bumped 1→2) so My Day has something real to show if reopened offline before a fresh fetch succeeds; a real `QuotaExceededError` catch in `enqueue()` (`OfflineQueueQuotaExceededError`) paired with fixing `MyDay.vue` to only report "queued" AFTER a successful enqueue, never optimistically before (the previous code could show a false save confirmation on a quota failure); and a hard `MAX_PENDING_QUEUE_ITEMS = 50` cap (`OfflineQueueFullError`) so an offline device can't accumulate an unbounded local queue.
+
+**Verified:** `php artisan test` 295/3 skipped (1441 assertions, identical to pre-change — frontend-only, no backend touched), `phpstan` 0 errors, `pint`/`types:check`/`build` all clean. REQ-NTF-04's actual write path confirmed live: a Playwright script logged into the real running dev server, loaded `/my-day`, and read the real `oda-crm-offline` IndexedDB database directly, confirming version 2 and a genuine cached snapshot of that user's real task. REQ-NTF-05/09 verified by code review + clean build only — no frontend unit-test runner exists in this codebase yet (Vitest is explicitly "not yet in CI" per `docs/runbook.md`) and a live quota-exhaustion/50-item-fill browser scenario was judged lower value than its cost; stated as a residual gap, not claimed proven.
+
+**Explicitly not solved:** true cold app-start while already offline still needs the service worker's own navigation-caching strategy (`public/sw.js`) to boot the real Vue app at all — not touched this pass; the existing SW still falls back to its generic static offline shell for that specific case.
+
+**Next:** no further known gap in the PWA-01/REQ-NTF backlog except real Android/iPhone device acceptance (blocked, no physical device) and the SW cold-start item just noted.
+
+---
+
 ## Completed: Assets QR-scan + Maintenance scheduling (closes REQ-AST-02/07)
 
 **Status:** done, verified. Closes the last two real gaps `implementation-plan.md`'s own status audit found.

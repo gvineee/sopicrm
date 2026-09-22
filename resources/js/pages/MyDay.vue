@@ -16,6 +16,13 @@ import TaskCard from '@/components/mobile/TaskCard.vue';
 import EmptyState from '@/components/states/EmptyState.vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    cacheTaskList,
+    getCachedTaskList,
+    OfflineQueueFullError,
+    OfflineQueueQuotaExceededError,
+    type CachedTaskSummary,
+} from '@/lib/offlineQueue';
 import { enqueuePhoto, enqueueSubmission, replayMyDayQueue } from '@/lib/taskOfflineSync';
 import type { OfflineQueueItemStatus, StatusDescriptor } from '@/types';
 
@@ -147,8 +154,99 @@ const photoLocalStatus = ref<OfflineQueueItemStatus | null>(null);
 const submitLocalStatus = ref<OfflineQueueItemStatus | null>(null);
 const localSubmitError = ref<string | null>(null);
 
+// REQ-NTF-04/05/09: honest, distinct messages for the two ways a local save
+// can genuinely fail — never presented as if the item was queued
+// successfully when it wasn't.
+function describeQueueError(error: unknown): string {
+    if (error instanceof OfflineQueueQuotaExceededError) {
+        return 'ადგილი არასაკმარისია მოწყობილობაზე — წაშალეთ ძველი გაგზავნილი ჩანაწერები ან შეამცირეთ ფოტოს ხარისხი და სცადეთ ხელახლა.';
+    }
+    if (error instanceof OfflineQueueFullError) {
+        return `ლოკალური რიგი სავსეა (მაქს. ${error.limit} ჩანაწერი) — კავშირის აღდგენამდე ვეღარ შეინახება მეტი. გაასუფთავეთ ძველი ჩანაწერები კავშირის აღდგენისთანავე.`;
+    }
+
+    return 'ლოკალურად შენახვა ვერ მოხერხდა.';
+}
+
 function isOffline(): boolean {
     return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+// REQ-NTF-04: bounded, read-only local snapshot of this same task list, so
+// reopening the app while offline (before any real fetch can succeed) has
+// something real to show instead of an empty page. Never used as a
+// submission target — every action still goes through the real queue/
+// replay path above. Cold-start offline access additionally depends on the
+// service worker actually booting the Vue app while offline (public/sw.js's
+// own navigation-caching strategy, not touched by this pass) — documented
+// here rather than silently assumed solved.
+const usingCachedSnapshot = ref(false);
+const cachedAt = ref<string | null>(null);
+const cachedTasks = ref<CachedTaskSummary[]>([]);
+
+const BUCKET_LABELS: Record<string, string> = {
+    overdue: 'ვადაგადაცილებული',
+    returned: 'დაბრუნებული',
+    today: 'დღეს',
+    inReview: 'განხილვაში',
+};
+
+function snapshotOf(tasks: DayTask[], bucket: string): CachedTaskSummary[] {
+    return tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        projectName: task.projectName ?? null,
+        status: task.status,
+        dueAt: task.dueAt ?? null,
+        bucket,
+    }));
+}
+
+async function refreshCachedSnapshot() {
+    if (!props.organizationId || !props.userId) return;
+
+    const snapshot = [
+        ...snapshotOf(props.overdue, 'overdue'),
+        ...snapshotOf(props.returned, 'returned'),
+        ...snapshotOf(props.today, 'today'),
+        ...snapshotOf(props.inReview, 'inReview'),
+    ];
+
+    try {
+        await cacheTaskList(props.organizationId, props.userId, snapshot);
+    } catch {
+        // Best-effort only — a failed cache write must never block the
+        // real, already-successful page render the user is currently
+        // looking at.
+    }
+}
+
+async function loadCachedSnapshotIfNeeded() {
+    if (!props.organizationId || !props.userId) return;
+
+    const hasRealData =
+        props.today.length > 0 || props.overdue.length > 0 || props.inReview.length > 0 || props.returned.length > 0;
+
+    if (hasRealData) {
+        // A real page render already has real props — cache them for next
+        // time, and never show the stale cached view over real data.
+        void refreshCachedSnapshot();
+
+        return;
+    }
+
+    if (!isOffline()) {
+        // Genuinely no tasks right now, and we can actually reach the
+        // server — this is a confirmed-empty state, not "no data yet".
+        return;
+    }
+
+    const cached = await getCachedTaskList(props.organizationId, props.userId);
+    if (cached && cached.tasks.length > 0) {
+        usingCachedSnapshot.value = true;
+        cachedAt.value = cached.cachedAt;
+        cachedTasks.value = cached.tasks;
+    }
 }
 
 async function capturePhoto(file: File) {
@@ -156,13 +254,18 @@ async function capturePhoto(file: File) {
     if (!task || !props.organizationId || !props.userId) return;
 
     if (isOffline()) {
-        photoLocalStatus.value = 'queued';
-        await enqueuePhoto(
-            props.organizationId,
-            props.userId,
-            { taskId: task.id, projectId: task.projectId },
-            file,
-        );
+        try {
+            await enqueuePhoto(
+                props.organizationId,
+                props.userId,
+                { taskId: task.id, projectId: task.projectId },
+                file,
+            );
+            photoLocalStatus.value = 'queued';
+            localSubmitError.value = null;
+        } catch (error) {
+            localSubmitError.value = describeQueueError(error);
+        }
 
         return;
     }
@@ -181,13 +284,18 @@ async function capturePhoto(file: File) {
                 // flipped false is still a real connectivity failure —
                 // queue it rather than leaving the photo silently lost.
                 if (isOffline()) {
-                    photoLocalStatus.value = 'queued';
-                    await enqueuePhoto(
-                        props.organizationId!,
-                        props.userId!,
-                        { taskId: task.id, projectId: task.projectId },
-                        file,
-                    );
+                    try {
+                        await enqueuePhoto(
+                            props.organizationId!,
+                            props.userId!,
+                            { taskId: task.id, projectId: task.projectId },
+                            file,
+                        );
+                        photoLocalStatus.value = 'queued';
+                        localSubmitError.value = null;
+                    } catch (error) {
+                        localSubmitError.value = describeQueueError(error);
+                    }
                 }
             },
         });
@@ -218,15 +326,19 @@ async function submitTask() {
             return;
         }
 
-        submitLocalStatus.value = 'queued';
-        await enqueueSubmission(props.organizationId, props.userId, {
-            taskId: task.id,
-            projectId: task.projectId,
-            comment: submitForm.comment,
-            submitted_quantity: submitForm.submitted_quantity || null,
-            attachment_ids: task.attachments.map((attachment) => attachment.id),
-        });
-        closeSheet();
+        try {
+            await enqueueSubmission(props.organizationId, props.userId, {
+                taskId: task.id,
+                projectId: task.projectId,
+                comment: submitForm.comment,
+                submitted_quantity: submitForm.submitted_quantity || null,
+                attachment_ids: task.attachments.map((attachment) => attachment.id),
+            });
+            submitLocalStatus.value = 'queued';
+            closeSheet();
+        } catch (error) {
+            localSubmitError.value = describeQueueError(error);
+        }
 
         return;
     }
@@ -271,6 +383,7 @@ function handleOnline() {
 
 onMounted(() => {
     window.addEventListener('online', handleOnline);
+    void loadCachedSnapshotIfNeeded();
     if (!isOffline()) {
         void replayQueue();
     }
@@ -323,8 +436,28 @@ function reportBlocker() {
             </p>
         </div>
 
+        <div v-if="usingCachedSnapshot" class="flex flex-col gap-3">
+            <p class="border-border bg-muted/50 text-muted-foreground rounded-lg border px-3 py-2 text-xs">
+                ოფლაინ რეჟიმი — ნაჩვენებია ბოლოს შენახული სია
+                <template v-if="cachedAt">({{ new Date(cachedAt).toLocaleString('ka-GE') }}-ის მდგომარეობით)</template>.
+                ეს სია მხოლოდ სანახავია — მოქმედებები კავშირის აღდგენისას შესაძლებელი იქნება.
+            </p>
+            <div
+                v-for="task in cachedTasks"
+                :key="task.id"
+                class="border-border flex items-center justify-between rounded-lg border p-3 text-sm"
+            >
+                <div class="flex flex-col">
+                    <span class="font-medium">{{ task.title }}</span>
+                    <span class="text-muted-foreground text-xs">
+                        {{ task.projectName ?? 'უცნობი პროექტი' }} · {{ BUCKET_LABELS[task.bucket] ?? task.bucket }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <EmptyState
-            v-if="hasEmployeeRecord && totalActionable === 0 && inReview.length === 0 && returned.length === 0"
+            v-if="!usingCachedSnapshot && hasEmployeeRecord && totalActionable === 0 && inReview.length === 0 && returned.length === 0"
             title="დღეს დავალება არ გაქვთ"
             description="ახალი დავალების მინიჭებისას აქ გამოჩნდება."
         />
