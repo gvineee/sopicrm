@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\AssetIncidentController;
+use App\Http\Controllers\Assets\AssetReportController;
 use App\Http\Controllers\Assets\CustodyTransactionController;
 use App\Http\Controllers\Assets\MaintenanceController;
 use App\Http\Controllers\Assets\StocktakeController;
@@ -20,6 +21,10 @@ Route::middleware(['auth', 'verified'])->prefix('assets')->name('assets.')->grou
     // with that single-segment route, but keeping the specific route first
     // documents the intent explicitly.
     Route::get('/qr/{qrToken}', [AssetController::class, 'scanQr'])->name('scan-qr');
+    // Registered before '/{asset}' for the same reason 'qr/{qrToken}' is —
+    // 'reports' never collides with a real asset UUID, but ordering it
+    // first documents that explicitly.
+    Route::get('/reports', [AssetReportController::class, 'index'])->name('reports.index');
     Route::get('/{asset}', [AssetController::class, 'show'])->name('show');
 
     Route::post('/{asset}/issue', [CustodyTransactionController::class, 'issue'])->name('issue');

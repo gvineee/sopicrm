@@ -8,6 +8,7 @@ use App\Domain\Assets\Models\Asset;
 use App\Domain\Assets\Models\AssetIncident;
 use App\Domain\Assets\Models\CustodyTransaction;
 use App\Domain\Assets\Models\Maintenance;
+use App\Domain\Assets\Models\StocktakeLine;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Services\PortableSearch;
 use App\Http\Controllers\Controller;
@@ -114,12 +115,31 @@ class AssetController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        // REQ-AST-10 ("full asset history"): the stocktake half of this
+        // asset's real timeline — every count/variance-resolution it was
+        // ever part of, alongside the custody/incident/maintenance history
+        // already loaded above.
+        $stocktakeLines = StocktakeLine::query()
+            ->where('asset_id', $asset->id)
+            ->with('stocktake')
+            ->orderByDesc('created_at')
+            ->get();
+
         return Inertia::render('Assets/Show', [
             'asset' => (new AssetResource($asset))->resolve(),
             'activeTransaction' => $activeTransaction === null ? null : (new CustodyTransactionResource($activeTransaction))->resolve(),
             'custodyHistory' => CustodyTransactionResource::collection($custodyHistory)->resolve(),
             'incidents' => AssetIncidentResource::collection($incidents)->resolve(),
             'maintenanceRecords' => MaintenanceResource::collection($maintenanceRecords)->resolve(),
+            'stocktakeLines' => $stocktakeLines->map(fn ($line) => [
+                'id' => $line->id,
+                'stocktake_id' => $line->stocktake_id,
+                'stocktake_scope_type' => $line->stocktake?->scope_type,
+                'expected_quantity' => (float) $line->expected_quantity,
+                'counted_quantity' => $line->counted_quantity !== null ? (float) $line->counted_quantity : null,
+                'has_approved_adjustment' => $line->variance_approved_adjustment_id !== null,
+                'created_at' => $line->created_at?->toIso8601String(),
+            ])->values(),
             'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
             'can' => [
                 'manageCustody' => $request->user()?->can('assets.custody.manage') ?? false,

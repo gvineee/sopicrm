@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * See 2026_09_17_090000_create_stocktake_adjustments_table.php: the only
@@ -17,6 +18,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * individually-tracked asset's state as a result of a stocktake variance
  * (spec section 9.6). A raw QR scan (StocktakeLine.counted_quantity) never
  * does this directly — only an approved adjustment does.
+ */
+/**
+ * @property Carbon|null $approved_at
  */
 class StocktakeAdjustment extends Model
 {

@@ -15,5 +15,11 @@ return [[
             'route' => 'assets.stocktakes.index',
             'permission' => ['assets.stocktakes.perform', 'assets.stocktakes.approve'],
         ],
+        [
+            'label' => 'რეპორტები',
+            'icon' => 'clipboard-list',
+            'route' => 'assets.reports.index',
+            'permission' => ['assets.assets.view', 'assets.custody.view'],
+        ],
     ],
 ]];

@@ -2,6 +2,24 @@
 
 Live checkpoint file. Update after every bounded task per `docs/claude-overnight-goal.md`'s execution loop. Newest entry on top.
 
+## Completed: Asset reports (REQ-AST-10) — closes out the Assets module's P1 backlog
+
+**Status:** done, verified. Read-only reporting layer only — no existing custody/incident/maintenance/stocktake business logic touched.
+
+**What was built:** `AssetReportController` with 5 fleet-wide reports (who-holds-what, overdue returns, per-project allocation, service history, lost assets), each gated on the exact existing Policy ability for its underlying data (`assets.custody.view`/`assets.assets.view` — no new permission). "Lost assets" correctly attributes cause (stocktake variance vs. incident write-off) by comparing timestamps, since either path can independently write off an asset. "Full asset history" — the 6th named report — was folded into the already-built `AssetController::show()` page (which already assembled custody/incident/maintenance history) by adding the one missing piece: the asset's own `StocktakeLine` history.
+
+**Real PHPStan errors found and fixed (not suppressed):** a non-exhaustive `match` over a plain `string` (fixed with a `default => throw` arm, since the caller had already validated the report type — genuinely unreachable, not a real gap); an untyped inner closure parameter breaking `Collection::flatMap()`'s generic inference; and a repeat of this session's own recurring "two adjacent docblocks — only the one immediately before `class` is attached" gotcha on `StocktakeAdjustment` (the `@property Carbon|null $approved_at` I added was initially ordered before the description docblock instead of after, so PHPStan still saw `approved_at` as untyped — moving it to be the last block before `class` fixed it).
+
+**Files changed:** new `app/Http/Controllers/Assets/AssetReportController.php`; `app/Http/Controllers/Assets/AssetController.php` (+stocktake history); `app/Domain/Assets/Models/StocktakeAdjustment.php` (docblock fix); `routes/modules/web-assets.php`, `config/modules/assets-nav.php`; new `resources/js/pages/Assets/Reports/Index.vue`; new `tests/Feature/Assets/AssetReportsTest.php` (8 tests, real fixture-backed — e.g. the lost-assets test creates one asset written off via each of the two real paths and asserts the report correctly distinguishes them, not just that both appear).
+
+**Contract/schema changes:** none — no migration.
+
+**Tests/gates:** `php artisan test --compact` → **307 passed / 3 skipped** (1533 assertions). `phpstan analyse` (scoped) → 0 errors. `pint --dirty --test` → clean. `npm run types:check`/`npm run build` → passed. One transient `EmailVerificationTest` failure on a shared-tree first run (a concurrent process's own test fixture briefly not existing) confirmed via isolated rerun and a clean full-suite rerun to be a race, not a real regression.
+
+**Next:** per `docs/claude-overnight-goal.md`, only BIO-03/BIO-04 (real BioStar API access), OPS-01 live-hosting execution, and PWA-01 real-device acceptance remain — all correctly blocked on external dependencies. A concurrent sibling session's Payroll CSV export (REQ-PAY-12/13) landed in the same working-tree window; not reviewed here.
+
+---
+
 ## Completed: PWA offline-queue remainder — task-list cache, quota handling, queue bound (REQ-NTF-04/05/09)
 
 **Status:** done, verified. See `docs/agent-handoff.md`'s matching entry for full detail — summarized here.
