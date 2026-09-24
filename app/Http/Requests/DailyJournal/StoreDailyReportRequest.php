@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\DailyJournal;
 
+use App\Http\Requests\DailyJournal\Concerns\ValidatesResponsibleUser;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -11,6 +12,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class StoreDailyReportRequest extends FormRequest
 {
+    use ValidatesResponsibleUser;
+
     public function authorize(): bool
     {
         // The controller runs the real Policy check (create, against the
@@ -27,7 +30,7 @@ class StoreDailyReportRequest extends FormRequest
     {
         return [
             'report_date' => ['required', 'date'],
-            'responsible_user_id' => ['required', 'uuid'],
+            'responsible_user_id' => ['required', 'uuid', $this->responsibleUserRule()],
             'team_ids' => ['array'],
             'team_ids.*' => ['uuid'],
             'task_ids' => ['array'],

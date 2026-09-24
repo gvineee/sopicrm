@@ -25,6 +25,9 @@ Route::middleware(['auth', 'verified'])->prefix('assets')->name('assets.')->grou
     // 'reports' never collides with a real asset UUID, but ordering it
     // first documents that explicitly.
     Route::get('/reports', [AssetReportController::class, 'index'])->name('reports.index');
+    // Above '/{asset}' for the same registration-order reason. Audit A13 —
+    // the JSON source for the initial-location selector.
+    Route::get('/location-options', [AssetController::class, 'locationOptions'])->name('location-options');
 
     // MUST stay above '/{asset}': Laravel matches in registration order and
     // '/{asset}' is a single-segment catch-all, so a literal 'stocktakes'

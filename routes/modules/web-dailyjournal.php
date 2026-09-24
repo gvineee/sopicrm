@@ -21,6 +21,10 @@ Route::middleware(['auth', 'verified'])
         Route::get('/', [DailyReportController::class, 'index'])->name('index');
         Route::get('/create', [DailyReportController::class, 'create'])->name('create');
         Route::post('/', [DailyReportController::class, 'store'])->name('store');
+        // MUST stay above '/{report}': that is a single-segment catch-all
+        // and would otherwise swallow this literal path. Audit A12 — the
+        // JSON source for the responsible-person selector.
+        Route::get('/responsible-users', [DailyReportController::class, 'responsibleUserOptions'])->name('responsible-users');
         Route::get('/{report}', [DailyReportController::class, 'show'])->name('show');
         Route::get('/{report}/edit', [DailyReportController::class, 'edit'])->name('edit');
         Route::put('/{report}', [DailyReportController::class, 'update'])->name('update');

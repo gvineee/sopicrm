@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('tasks-calendar', [DashboardController::class, 'calendar'])->name('tasks.calendar');
 
+    // Audit A15 / NAV-02: the filtered list each dashboard KPI card opens.
+    // Owned by DashboardController so it shares that controller's own
+    // visibility + filter helpers with the counts themselves.
+    Route::get('tasks-overview', [DashboardController::class, 'tasks'])->name('tasks.overview');
+
     Route::resource('projects', ProjectController::class);
     Route::post('projects/{project}/status', [ProjectController::class, 'changeStatus'])->name('projects.status');
 

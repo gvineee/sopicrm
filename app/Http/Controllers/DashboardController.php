@@ -6,6 +6,7 @@ use App\Domain\Projects\Models\Project;
 use App\Domain\Tasks\Models\Task;
 use App\Models\User;
 use App\Policies\TaskPolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -31,6 +32,19 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
+    public const FILTER_OPEN = 'open';
+
+    public const FILTER_OVERDUE = 'overdue';
+
+    public const FILTER_COMPLETED_30D = 'completed_30d';
+
+    /** Georgian headings for the drill-down list, keyed by filter. */
+    private const FILTER_TITLES = [
+        self::FILTER_OPEN => 'ღია დავალებები',
+        self::FILTER_OVERDUE => 'ვადაგადაცილებული დავალებები',
+        self::FILTER_COMPLETED_30D => 'დასრულებული დავალებები (30 დღე)',
+    ];
+
     public function index(Request $request, TaskPolicy $taskPolicy): Response
     {
         /** @var User $user */
@@ -42,8 +56,6 @@ class DashboardController extends Controller
                 $q->where('user_id', $user->id)->whereNull('removed_at');
             });
         }
-        $visibleProjectIds = (clone $projectsQuery)->pluck('id');
-
         $activeProjectsCount = (clone $projectsQuery)->where('status', 'active')->count();
 
         // Being able to see a project (membership) is not the same as being
@@ -52,21 +64,14 @@ class DashboardController extends Controller
         // ever sees tasks they are the performer of, matching
         // TaskPolicy::view()'s own rule exactly (see
         // TaskPolicy::scopeVisibleToPerformer()).
-        $taskBase = Task::query()->whereIn('project_id', $visibleProjectIds);
-        if (! $user->can('tasks.tasks.view')) {
-            $taskPolicy->scopeVisibleToPerformer($taskBase, $user);
-        }
+        $taskBase = $this->visibleTaskQuery($user, $taskPolicy);
 
-        $openTasksCount = (clone $taskBase)->whereNotIn('status', ['completed', 'cancelled'])->count();
-        $overdueTasksCount = (clone $taskBase)
-            ->whereNotIn('status', ['completed', 'cancelled'])
-            ->whereNotNull('due_at')
-            ->where('due_at', '<', now())
-            ->count();
-        $completedLast30DaysCount = (clone $taskBase)
-            ->where('status', 'completed')
-            ->where('updated_at', '>=', Carbon::now()->subDays(30))
-            ->count();
+        // Audit A15 / acceptance NAV-02: each KPI below and the drill-down
+        // list behind its card are produced by the SAME filter helper, so a
+        // card's number and the list it opens cannot drift apart.
+        $openTasksCount = $this->applyTaskFilter((clone $taskBase), self::FILTER_OPEN)->count();
+        $overdueTasksCount = $this->applyTaskFilter((clone $taskBase), self::FILTER_OVERDUE)->count();
+        $completedLast30DaysCount = $this->applyTaskFilter((clone $taskBase), self::FILTER_COMPLETED_30D)->count();
 
         $projects = $projectsQuery->with(['client', 'manager'])
             ->orderByDesc('updated_at')
@@ -127,20 +132,7 @@ class DashboardController extends Controller
         $rangeStart = $anchor->copy()->startOfMonth();
         $rangeEnd = $anchor->copy()->endOfMonth();
 
-        $projectsQuery = Project::query();
-        if (! $user->can('viewAny', Project::class)) {
-            $projectsQuery->whereHas('memberships', function ($q) use ($user) {
-                $q->where('user_id', $user->id)->whereNull('removed_at');
-            });
-        }
-        $visibleProjectIds = $projectsQuery->pluck('id');
-
-        $taskBase = Task::query()->whereIn('project_id', $visibleProjectIds);
-        if (! $user->can('tasks.tasks.view')) {
-            $taskPolicy->scopeVisibleToPerformer($taskBase, $user);
-        }
-
-        $tasks = $taskBase
+        $tasks = $this->visibleTaskQuery($user, $taskPolicy)
             ->whereNotNull('due_at')
             ->whereBetween('due_at', [$rangeStart, $rangeEnd])
             ->with('project')
@@ -159,5 +151,103 @@ class DashboardController extends Controller
             'month' => $anchor->toDateString(),
             'tasks' => $tasks,
         ]);
+    }
+
+    /**
+     * Audit A15 / acceptance NAV-02: the drill-down behind each dashboard
+     * KPI card. It deliberately reuses `visibleTaskQuery()` +
+     * `applyTaskFilter()` — the very same helpers `index()` counts with —
+     * so the number on the card and the rows on this page are the same
+     * query, not two similar ones that can silently diverge.
+     *
+     * This is a dashboard-owned cross-project view, exactly like
+     * `calendar()` above; it is not a second task workspace. When the
+     * global `/tasks` workspace lands it should absorb this route rather
+     * than replicate its data (spec 03 §13.4: "ცალკე რეპლიცირებული
+     * მონაცემები არ გამოიყენო ორი სიისთვის").
+     */
+    public function tasks(Request $request, TaskPolicy $taskPolicy): Response
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $filter = $request->string('filter')->trim()->value();
+        if (! array_key_exists($filter, self::FILTER_TITLES)) {
+            $filter = self::FILTER_OPEN;
+        }
+
+        $tasks = $this->applyTaskFilter($this->visibleTaskQuery($user, $taskPolicy), $filter)
+            ->with(['project', 'accountableOwner'])
+            ->orderByRaw('case when due_at is null then 1 else 0 end')
+            ->orderBy('due_at')
+            ->paginate(30)
+            ->withQueryString();
+
+        return Inertia::render('Dashboard/Tasks', [
+            'filter' => $filter,
+            'title' => self::FILTER_TITLES[$filter],
+            'tasks' => collect($tasks->items())->map(fn (Task $task) => [
+                'id' => $task->id,
+                'project_id' => $task->project_id,
+                'project_name' => $task->project?->name,
+                'title' => $task->title,
+                'status' => $task->status,
+                'priority' => $task->priority,
+                'due_at' => $task->due_at?->toDateString(),
+                'owner_name' => $task->accountableOwner === null
+                    ? null
+                    : trim($task->accountableOwner->first_name.' '.$task->accountableOwner->last_name),
+            ])->all(),
+            'pagination' => [
+                'page' => $tasks->currentPage(),
+                'perPage' => $tasks->perPage(),
+                'total' => $tasks->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * The single definition of "tasks this user may see": projects they can
+     * reach (owner sees the organization, everyone else their active
+     * memberships) narrowed by TaskPolicy::scopeVisibleToPerformer() for
+     * anyone without project-wide `tasks.tasks.view`. index(), calendar()
+     * and tasks() all start here so no screen can quietly widen it.
+     *
+     * @return Builder<Task>
+     */
+    private function visibleTaskQuery(User $user, TaskPolicy $taskPolicy): Builder
+    {
+        $projectsQuery = Project::query();
+        if (! $user->can('viewAny', Project::class)) {
+            $projectsQuery->whereHas('memberships', function ($q) use ($user) {
+                $q->where('user_id', $user->id)->whereNull('removed_at');
+            });
+        }
+
+        $taskQuery = Task::query()->whereIn('project_id', $projectsQuery->pluck('id'));
+
+        if (! $user->can('tasks.tasks.view')) {
+            $taskPolicy->scopeVisibleToPerformer($taskQuery, $user);
+        }
+
+        return $taskQuery;
+    }
+
+    /**
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    private function applyTaskFilter(Builder $query, string $filter): Builder
+    {
+        return match ($filter) {
+            self::FILTER_OVERDUE => $query
+                ->whereNotIn('status', ['completed', 'cancelled'])
+                ->whereNotNull('due_at')
+                ->where('due_at', '<', Carbon::now()),
+            self::FILTER_COMPLETED_30D => $query
+                ->where('status', 'completed')
+                ->where('updated_at', '>=', Carbon::now()->subDays(30)),
+            default => $query->whereNotIn('status', ['completed', 'cancelled']),
+        };
     }
 }

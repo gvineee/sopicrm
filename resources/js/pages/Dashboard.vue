@@ -226,15 +226,20 @@ function cancelSubmitDialog() {
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KpiTile label="აქტიური პროექტები" :value="String(kpis.active_projects)" :icon="Building2" href="/projects?status=active" />
-            <KpiTile label="ღია დავალებები" :value="String(kpis.open_tasks)" :icon="Clock" href="/projects" />
+            <KpiTile label="ღია დავალებები" :value="String(kpis.open_tasks)" :icon="Clock" href="/tasks-overview?filter=open" />
             <KpiTile
                 label="ვადაგადაცილებული დავალებები"
                 :value="String(kpis.overdue_tasks)"
                 :icon="AlertTriangle"
                 :delta-tone="kpis.overdue_tasks > 0 ? 'negative' : 'neutral'"
-                href="/projects"
+                href="/tasks-overview?filter=overdue"
             />
-            <KpiTile label="დასრულებული (30 დღე)" :value="String(kpis.completed_last_30_days)" :icon="CheckCircle2" href="/projects" />
+            <KpiTile
+                label="დასრულებული (30 დღე)"
+                :value="String(kpis.completed_last_30_days)"
+                :icon="CheckCircle2"
+                href="/tasks-overview?filter=completed_30d"
+            />
         </div>
 
         <section class="flex flex-col gap-3">
@@ -273,7 +278,10 @@ function cancelSubmitDialog() {
                     <p class="text-foreground text-sm font-medium">{{ card.title }}</p>
                     <p class="text-muted-foreground text-xs">{{ card.project_name }}</p>
                 </template>
-                <template #card-actions="{ card }">
+                <!-- #card-footer, not #card-actions: this button is about the
+                     card, not about a destination column, so it must render
+                     once per card rather than once per move target (A16). -->
+                <template #card-footer="{ card }">
                     <button
                         type="button"
                         class="border-border text-muted-foreground hover:bg-accent rounded-full border px-2 py-0.5 text-[11px]"

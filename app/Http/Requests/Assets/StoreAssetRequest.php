@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Assets;
 
+use App\Domain\Shared\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 class StoreAssetRequest extends FormRequest
 {
@@ -19,8 +22,14 @@ class StoreAssetRequest extends FormRequest
             'category' => ['required', 'string', 'max:255'],
             'tracking_type' => ['required', 'in:individual,kit_component,quantity,consumable'],
             'inventory_code' => ['required', 'string', 'max:255'],
-            'initial_location_type' => ['required', 'in:warehouse,site,employee'],
-            'initial_location_id' => ['required', 'uuid'],
+            // Audit A13. `warehouse` is not offered at registration: there is
+            // no `warehouses` table to validate an id against (see
+            // App\Domain\Assets\Actions\ReturnCustodyAction), so accepting one
+            // here could only ever store an unresolvable identifier. Custody
+            // returns that already write `locatable_type='warehouse'` rows are
+            // untouched — this is the registration form's input surface only.
+            'initial_location_type' => ['required', 'in:site,employee'],
+            'initial_location_id' => ['required', 'uuid', $this->locationRule()],
             'condition' => ['required', 'in:new,good,fair,damaged,under_repair,written_off'],
             'brand' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],
@@ -63,6 +72,23 @@ class StoreAssetRequest extends FormRequest
             'service_due_at' => $this->validatedNullableString('service_due_at'),
             'quantity_on_hand' => $this->validatedNullableString('quantity_on_hand'),
         ];
+    }
+
+    /**
+     * Audit A13: `initial_location_id` was previously validated as a
+     * well-formed uuid and nothing else, so any uuid at all — including a
+     * record belonging to another organization — was accepted and stored as
+     * the asset's location. The rule resolves against the table the selected
+     * type actually names, scoped by the SAME organization id the Eloquent
+     * tenant scope uses (`Rule::exists` runs on the query builder, below
+     * Eloquent's global scope, so the predicate has to be explicit here).
+     */
+    private function locationRule(): Exists
+    {
+        $table = $this->input('initial_location_type') === 'site' ? 'sites' : 'employees';
+
+        return Rule::exists($table, 'id')
+            ->where('organization_id', CurrentOrganization::id());
     }
 
     private function validatedNullableString(string $key): ?string

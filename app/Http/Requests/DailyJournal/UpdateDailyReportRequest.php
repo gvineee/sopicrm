@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\DailyJournal;
 
+use App\Http\Requests\DailyJournal\Concerns\ValidatesResponsibleUser;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateDailyReportRequest extends FormRequest
 {
+    use ValidatesResponsibleUser;
+
     public function authorize(): bool
     {
         return true;
@@ -23,7 +26,7 @@ class UpdateDailyReportRequest extends FormRequest
             // status, since it depends on server-known state, not just the
             // request shape.
             'reason' => ['nullable', 'string', 'max:2000'],
-            'responsible_user_id' => ['sometimes', 'uuid'],
+            'responsible_user_id' => ['sometimes', 'uuid', $this->responsibleUserRule()],
             'team_ids' => ['sometimes', 'array'],
             'team_ids.*' => ['uuid'],
             'task_ids' => ['sometimes', 'array'],

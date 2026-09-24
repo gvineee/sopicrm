@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import EntityPicker from '@/components/EntityPicker.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-type Employee = { id: string; first_name: string; last_name: string };
-
-defineProps<{ employees: Employee[] }>();
 
 defineOptions({ layout: { mobileTitle: 'აქტივის რეგისტრაცია' } });
 
@@ -16,7 +14,7 @@ const form = useForm({
     category: '',
     tracking_type: 'individual',
     inventory_code: '',
-    initial_location_type: 'warehouse',
+    initial_location_type: 'site',
     initial_location_id: '',
     condition: 'new',
     brand: '',
@@ -25,6 +23,17 @@ const form = useForm({
     ownership: 'owned',
     quantity_on_hand: '',
 });
+
+// Shown next to the picker; `form.initial_location_id` carries the id that
+// is actually submitted (A13 — the id is never shown or typed).
+const locationName = ref<string | null>(null);
+
+// A site id is meaningless once the type switches to employee, so the
+// previous choice is dropped rather than silently carried over.
+function resetLocation() {
+    form.initial_location_id = '';
+    locationName.value = null;
+}
 
 function submit() {
     form.post('/assets', { preserveScroll: true });
@@ -106,22 +115,22 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="asset-location-type">საწყისი მდებარეობა</Label>
-                    <select id="asset-location-type" v-model="form.initial_location_type" class="border-input bg-background h-9 rounded-md border px-3 text-sm">
-                        <option value="warehouse">საწყობი</option>
+                    <select id="asset-location-type" v-model="form.initial_location_type" class="border-input bg-background h-9 rounded-md border px-3 text-sm" @change="resetLocation">
                         <option value="site">ობიექტი</option>
                         <option value="employee">თანამშრომელი</option>
                     </select>
                     <InputError :message="form.errors.initial_location_type" />
                 </div>
                 <div class="grid gap-2">
-                    <Label for="asset-location-id">მდებარეობის ID</Label>
-                    <select v-if="form.initial_location_type === 'employee'" id="asset-location-id" v-model="form.initial_location_id" class="border-input bg-background h-9 rounded-md border px-3 text-sm">
-                        <option value="">აირჩიეთ</option>
-                        <option v-for="employee in employees" :key="employee.id" :value="employee.id">
-                            {{ employee.first_name }} {{ employee.last_name }}
-                        </option>
-                    </select>
-                    <Input v-else id="asset-location-id" v-model="form.initial_location_id" placeholder="საწყობის/ობიექტის UUID" />
+                    <Label for="asset-location-id">{{ form.initial_location_type === 'site' ? 'ობიექტი' : 'თანამშრომელი' }}</Label>
+                    <EntityPicker
+                        :id="`asset-location-${form.initial_location_type}`"
+                        v-model="form.initial_location_id"
+                        v-model:selected-label="locationName"
+                        :endpoint="`/assets/location-options?type=${form.initial_location_type}`"
+                        :placeholder="form.initial_location_type === 'site' ? 'მოძებნეთ ობიექტი' : 'მოძებნეთ თანამშრომელი'"
+                        empty-text="ვერ მოიძებნა"
+                    />
                     <InputError :message="form.errors.initial_location_id" />
                 </div>
             </div>

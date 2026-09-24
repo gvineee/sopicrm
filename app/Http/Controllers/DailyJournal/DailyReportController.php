@@ -13,6 +13,7 @@ use App\Domain\DailyJournal\Exceptions\StaleDailyReportVersionException;
 use App\Domain\DailyJournal\Models\DailyReport;
 use App\Domain\Employees\Models\Team;
 use App\Domain\Projects\Models\Project;
+use App\Domain\Shared\Services\PortableSearch;
 use App\Domain\Tasks\Models\Task;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DailyJournal\AcceptDailyReportRequest;
@@ -22,6 +23,8 @@ use App\Http\Requests\DailyJournal\SubmitDailyReportRequest;
 use App\Http\Requests\DailyJournal\UpdateDailyReportRequest;
 use App\Http\Resources\DailyJournal\DailyReportResource;
 use App\Http\Resources\DailyJournal\DailyReportRevisionResource;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -107,6 +110,52 @@ class DailyReportController extends Controller
         ]);
     }
 
+    /**
+     * Audit A12: the responsible person used to be a hand-typed UUID field.
+     * This is the server-side searchable selector behind it (spec 02 §10) —
+     * resources/js/components/EntityPicker.vue calls it and never shows the
+     * id at all.
+     *
+     * Scoped exactly like Projects\ProjectController::create()'s own manager
+     * list: real login accounts of the caller's organization, system actors
+     * excluded. Gated by `viewAny` on this project's journal, so the list
+     * discloses nothing to someone who could not already open the journal.
+     * The ids it returns are still re-validated by
+     * StoreDailyReportRequest/UpdateDailyReportRequest — picking from this
+     * list is a convenience, never the authorization boundary.
+     */
+    public function responsibleUserOptions(Request $request, Project $project): JsonResponse
+    {
+        $this->authorize('viewAny', [DailyReport::class, $project]);
+
+        $term = trim((string) $request->query('q', ''));
+
+        $users = User::query()
+            ->where('organization_id', $request->user()->organization_id)
+            ->where('is_system_account', false)
+            ->when($term !== '', function ($query) use ($term): void {
+                PortableSearch::where($query, 'name', "%{$term}%");
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name']);
+
+        $memberUserIds = $project->memberships()
+            ->whereNull('removed_at')
+            ->pluck('user_id')
+            ->all();
+
+        return response()->json([
+            'options' => $users->map(fn (User $user) => [
+                'id' => $user->id,
+                'label' => $user->name,
+                // Disambiguates same-named colleagues without exposing an
+                // email address or any other contact detail.
+                'sublabel' => in_array($user->id, $memberUserIds, true) ? 'პროექტის წევრი' : null,
+            ])->all(),
+        ]);
+    }
+
     public function store(StoreDailyReportRequest $request, Project $project, CreateDailyReportDraftAction $action): RedirectResponse
     {
         $this->authorize('create', [DailyReport::class, $project]);
@@ -152,7 +201,10 @@ class DailyReportController extends Controller
         $this->ensureReportBelongsToProject($project, $report);
         $this->authorize('update', $report);
 
-        $report->load(['taskLinks.task']);
+        // `responsible` is loaded so DailyReportResource emits
+        // `responsible_name` — the selector shows the already-chosen person
+        // by name; the uuid alone would leave the field looking empty (A12).
+        $report->load(['taskLinks.task', 'responsible']);
 
         return Inertia::render('DailyJournal/Form', [
             'project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->code],

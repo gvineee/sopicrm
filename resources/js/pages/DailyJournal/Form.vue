@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import EntityPicker from '@/components/EntityPicker.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +16,7 @@ type ReportDetail = {
     status: string;
     report_date: string;
     responsible_user_id: string;
+    responsible_name?: string | null;
     team_ids: string[];
     headcount_manual_override: number | null;
     headcount_variance_note: string | null;
@@ -45,6 +47,10 @@ const isEdit = computed(() => props.report !== null);
 // the data object passed to it, so those keys need an untyped read.
 const serverErrors = computed(() => form.errors as Record<string, string | undefined>);
 const base = `/projects/${props.project.id}/daily-journal`;
+
+// The responsible person's NAME for display; `form.responsible_user_id`
+// carries the id that is actually submitted (A12 — the id is never shown).
+const responsibleName = ref<string | null>(props.report?.responsible_name ?? null);
 
 const form = useForm({
     report_date: props.report?.report_date ?? new Date().toISOString().slice(0, 10),
@@ -116,8 +122,15 @@ function submit() {
                     <p v-if="form.errors.report_date" class="text-destructive text-sm">{{ form.errors.report_date }}</p>
                 </div>
                 <div class="grid gap-2">
-                    <Label for="responsible">პასუხისმგებელი (User ID)</Label>
-                    <Input id="responsible" v-model="form.responsible_user_id" required placeholder="UUID" />
+                    <Label for="responsible">პასუხისმგებელი</Label>
+                    <EntityPicker
+                        id="responsible"
+                        v-model="form.responsible_user_id"
+                        v-model:selected-label="responsibleName"
+                        :endpoint="`${base}/responsible-users`"
+                        placeholder="მოძებნეთ პასუხისმგებელი"
+                        empty-text="ასეთი თანამშრომელი ვერ მოიძებნა"
+                    />
                     <p v-if="form.errors.responsible_user_id" class="text-destructive text-sm">{{ form.errors.responsible_user_id }}</p>
                 </div>
             </div>

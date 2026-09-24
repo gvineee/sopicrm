@@ -9,6 +9,7 @@ use App\Domain\Assets\Models\AssetIncident;
 use App\Domain\Assets\Models\CustodyTransaction;
 use App\Domain\Assets\Models\Maintenance;
 use App\Domain\Assets\Models\StocktakeLine;
+use App\Domain\Devices\Models\Site;
 use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Services\PortableSearch;
 use App\Http\Controllers\Controller;
@@ -17,6 +18,7 @@ use App\Http\Resources\Assets\AssetIncidentResource;
 use App\Http\Resources\Assets\AssetResource;
 use App\Http\Resources\Assets\CustodyTransactionResource;
 use App\Http\Resources\Assets\MaintenanceResource;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -70,8 +72,70 @@ class AssetController extends Controller
     {
         $this->authorize('create', Asset::class);
 
-        return Inertia::render('Assets/Create', [
-            'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name']),
+        return Inertia::render('Assets/Create');
+    }
+
+    /**
+     * Audit A13: the initial location used to be a hand-typed UUID field
+     * ("საწყობის/ობიექტის UUID"). This is the server-side searchable
+     * selector behind it (spec 02 §10) — resources/js/components/EntityPicker.vue
+     * calls it and the id never appears on screen.
+     *
+     * Only the location types this system can actually resolve to a named
+     * record are offered: `site` (App\Domain\Devices\Models\Site) and
+     * `employee`. `warehouse` is deliberately absent — there is no
+     * `warehouses` table yet (see App\Domain\Assets\Actions\ReturnCustodyAction's
+     * own note), so a "warehouse id" could only ever have been invented by
+     * the person typing it. Stored `locatable_type='warehouse'` rows written
+     * by a custody return stay valid; they just cannot be authored here.
+     *
+     * StoreAssetRequest re-validates whatever comes back — this list is a
+     * convenience, never the authorization boundary.
+     */
+    public function locationOptions(Request $request): JsonResponse
+    {
+        $this->authorize('create', Asset::class);
+
+        $term = trim((string) $request->query('q', ''));
+        $like = "%{$term}%";
+
+        if ($request->query('type') === 'site') {
+            $sites = Site::query()
+                ->where('is_active', true)
+                ->when($term !== '', function ($query) use ($like): void {
+                    PortableSearch::where($query, 'name', $like);
+                })
+                ->orderBy('name')
+                ->limit(20)
+                ->get(['id', 'name', 'address']);
+
+            return response()->json([
+                'options' => $sites->map(fn (Site $site) => [
+                    'id' => $site->id,
+                    'label' => $site->name,
+                    'sublabel' => $site->address,
+                ])->all(),
+            ]);
+        }
+
+        $employees = Employee::query()
+            ->when($term !== '', function ($query) use ($like): void {
+                $query->where(function ($inner) use ($like): void {
+                    PortableSearch::where($inner, 'first_name', $like);
+                    PortableSearch::orWhere($inner, 'last_name', $like);
+                    PortableSearch::orWhere($inner, 'internal_code', $like);
+                });
+            })
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['id', 'first_name', 'last_name', 'internal_code']);
+
+        return response()->json([
+            'options' => $employees->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'label' => trim($employee->first_name.' '.$employee->last_name),
+                'sublabel' => $employee->internal_code,
+            ])->all(),
         ]);
     }
 
