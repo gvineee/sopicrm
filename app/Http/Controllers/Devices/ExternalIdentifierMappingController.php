@@ -43,21 +43,43 @@ class ExternalIdentifierMappingController extends Controller
         $refs = collect($mappings->items())->pluck('external_identifier');
 
         // One aggregated query instead of one per row: how many times this
-        // still-unrecognized card has actually swiped, on which device(s),
-        // and across what time span — the context a reviewer needs to judge
-        // "is this real" before picking an employee.
+        // still-unrecognized card has actually swiped and across what time
+        // span — the context a reviewer needs to judge "is this real"
+        // before picking an employee.
+        //
+        // `device_id` is deliberately NOT aggregated here: it is a uuid
+        // column, and PostgreSQL has no `max(uuid)` aggregate at all
+        // (`SQLSTATE[42883]: function max(uuid) does not exist`) — this
+        // page 500'd in production for exactly that reason while the
+        // SQLite-backed test suite accepted the same SQL happily. Even
+        // where it "works", picking the lexicographically largest UUID is
+        // meaningless: the reviewer wants the device of the card's most
+        // RECENT swipe, which is what the second query below resolves, by
+        // time, with a stable id tie-breaker.
         $eventStats = RawAccessEvent::query()
             ->whereIn('unmatched_credential_ref', $refs)
-            ->selectRaw('unmatched_credential_ref, count(*) as event_count, min(normalized_event_time_utc) as first_event_at, max(normalized_event_time_utc) as last_event_at, max(device_id) as sample_device_id')
+            ->selectRaw('unmatched_credential_ref, count(*) as event_count, min(normalized_event_time_utc) as first_event_at, max(normalized_event_time_utc) as last_event_at')
             ->groupBy('unmatched_credential_ref')
             ->get()
             ->keyBy('unmatched_credential_ref');
 
+        // Bounded by the page's own refs AND by the exact last-event
+        // timestamps computed above, so this never loads a busy card's
+        // entire event history just to name one device.
+        $latestDeviceByRef = RawAccessEvent::query()
+            ->whereIn('unmatched_credential_ref', $refs)
+            ->whereIn('normalized_event_time_utc', $eventStats->pluck('last_event_at')->filter()->all())
+            ->orderByDesc('normalized_event_time_utc')
+            ->orderByDesc('id')
+            ->get(['unmatched_credential_ref', 'device_id'])
+            ->unique('unmatched_credential_ref')
+            ->keyBy('unmatched_credential_ref');
+
         $deviceNames = Device::query()
-            ->whereIn('id', $eventStats->pluck('sample_device_id')->filter())
+            ->whereIn('id', $latestDeviceByRef->pluck('device_id')->filter()->all())
             ->pluck('serial_number', 'id');
 
-        $mappings->through(function (ExternalIdentifierMapping $mapping) use ($eventStats, $deviceNames) {
+        $mappings->through(function (ExternalIdentifierMapping $mapping) use ($eventStats, $latestDeviceByRef, $deviceNames) {
             /** @var RawAccessEvent|null $stats */
             $stats = $eventStats->get($mapping->external_identifier);
 
@@ -74,7 +96,9 @@ class ExternalIdentifierMappingController extends Controller
                 'event_count' => $stats === null ? 0 : $stats->getAttribute('event_count'),
                 'first_event_at' => $stats?->getAttribute('first_event_at'),
                 'last_event_at' => $stats?->getAttribute('last_event_at'),
-                'sample_device_serial' => $stats === null ? null : $deviceNames->get($stats->getAttribute('sample_device_id')),
+                'sample_device_serial' => $deviceNames->get(
+                    $latestDeviceByRef->get($mapping->external_identifier)?->getAttribute('device_id')
+                ),
             ];
         });
 

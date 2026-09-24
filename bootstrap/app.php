@@ -53,4 +53,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // Audit A01 (P0): the public error response carries ONLY a
+        // correlation id; the unredacted detail stays in the server log
+        // under that same id. `AssignRequestId` already generates it per
+        // request and echoes it as X-Request-Id, so support can map a
+        // user-reported reference straight to the real log entry without
+        // ever putting SQL, a stack trace, a file path or a cookie in an
+        // HTTP response body. See resources/views/errors/500.blade.php for
+        // the HTML side of the same contract.
+        $exceptions->context(fn () => [
+            'request_id' => request()->attributes->get('request_id'),
+        ]);
     })->create();

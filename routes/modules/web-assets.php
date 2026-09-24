@@ -25,6 +25,19 @@ Route::middleware(['auth', 'verified'])->prefix('assets')->name('assets.')->grou
     // 'reports' never collides with a real asset UUID, but ordering it
     // first documents that explicitly.
     Route::get('/reports', [AssetReportController::class, 'index'])->name('reports.index');
+
+    // MUST stay above '/{asset}': Laravel matches in registration order and
+    // '/{asset}' is a single-segment catch-all, so a literal 'stocktakes'
+    // would otherwise be bound as an asset id and fail route-model binding
+    // with a 404 — which is exactly what happened in production (audit
+    // A03) when these were originally appended at the bottom of this file.
+    Route::get('/stocktakes', [StocktakeController::class, 'index'])->name('stocktakes.index');
+    Route::post('/stocktakes', [StocktakeController::class, 'store'])->name('stocktakes.store');
+    Route::get('/stocktakes/{stocktake}', [StocktakeController::class, 'show'])->name('stocktakes.show');
+    Route::post('/stocktakes/{stocktake}/lines/{line}/scan', [StocktakeController::class, 'scan'])->name('stocktakes.scan');
+    Route::post('/stocktakes/{stocktake}/lines/{line}/approve-variance', [StocktakeController::class, 'approveVariance'])->name('stocktakes.approve-variance');
+    Route::post('/stocktakes/{stocktake}/complete', [StocktakeController::class, 'complete'])->name('stocktakes.complete');
+
     Route::get('/{asset}', [AssetController::class, 'show'])->name('show');
 
     Route::post('/{asset}/issue', [CustodyTransactionController::class, 'issue'])->name('issue');
@@ -39,11 +52,4 @@ Route::middleware(['auth', 'verified'])->prefix('assets')->name('assets.')->grou
     Route::post('/custody/{transaction}/return', [CustodyTransactionController::class, 'return'])->name('custody.return');
 
     Route::post('/incidents/{incident}/decide', [AssetIncidentController::class, 'decide'])->name('incidents.decide');
-
-    Route::get('/stocktakes', [StocktakeController::class, 'index'])->name('stocktakes.index');
-    Route::post('/stocktakes', [StocktakeController::class, 'store'])->name('stocktakes.store');
-    Route::get('/stocktakes/{stocktake}', [StocktakeController::class, 'show'])->name('stocktakes.show');
-    Route::post('/stocktakes/{stocktake}/lines/{line}/scan', [StocktakeController::class, 'scan'])->name('stocktakes.scan');
-    Route::post('/stocktakes/{stocktake}/lines/{line}/approve-variance', [StocktakeController::class, 'approveVariance'])->name('stocktakes.approve-variance');
-    Route::post('/stocktakes/{stocktake}/complete', [StocktakeController::class, 'complete'])->name('stocktakes.complete');
 });
