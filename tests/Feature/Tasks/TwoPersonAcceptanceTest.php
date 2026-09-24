@@ -78,6 +78,33 @@ beforeEach(function () {
     $this->task = $this->makeTask($this->project, ['planned_quantity' => '100.00', 'unit' => 'm2']);
 });
 
+test('DV-02: someone the task was never given to cannot start or submit it, and it cannot be submitted before it is started', function () {
+    $draft = $this->makeTask($this->project, ['planned_quantity' => '10.00', 'status' => 'draft']);
+
+    // A colleague with a real employee record, simply not this task's
+    // performer: neither working on it nor submitting it is open to them.
+    expect($this->mateUser->can('work', $draft))->toBeFalse();
+
+    $this->actingAs($this->mateUser)
+        ->post(route('projects.tasks.start', [$this->project, $draft]))
+        ->assertForbidden();
+
+    $this->actingAs($this->mateUser)
+        ->post(route('projects.tasks.submit', [$this->project, $draft]), ['submitted_quantity' => '10.00'])
+        ->assertForbidden();
+
+    // And the real performer cannot skip the workflow either: a task nobody
+    // has started is not a task anyone can report as done.
+    CurrentOrganization::set($this->organization->id);
+    $this->actingAs($this->performerUser)
+        ->post(route('projects.tasks.submit', [$this->project, $draft]), ['submitted_quantity' => '10.00'])
+        ->assertSessionHasErrors('status');
+
+    CurrentOrganization::set($this->organization->id);
+    expect($draft->refresh()->status)->toBe('draft')
+        ->and(TaskSubmission::query()->where('task_id', $draft->id)->count())->toBe(0);
+});
+
 test('DV-03: the performer cannot accept their own submission on any transport, self_close_allowed or not', function () {
     // The flag is switched ON deliberately: under the old rule this exact
     // row was the authorized self-close case (TM-01).
