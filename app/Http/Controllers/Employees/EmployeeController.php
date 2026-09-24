@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employees;
 
+use App\Domain\Devices\Support\CompanyScope;
 use App\Domain\Employees\Actions\CreateEmployeeAction;
 use App\Domain\Employees\Actions\UpdateEmployeeAction;
 use App\Domain\Employees\Models\Employee;
@@ -48,7 +49,15 @@ class EmployeeController extends Controller
         $supervisorId = $request->query('supervisor_employee_id');
 
         $employees = Employee::query()
-            ->with(['team', 'jobPosition'])
+            ->with(['team', 'jobPosition']);
+
+        // Audit A14. Without this the roster listed every company's people to
+        // a company-scoped HR user, while EmployeePolicy::view() refused to
+        // open any of them — so the list disclosed exactly the names and
+        // internal codes the detail page was protecting.
+        CompanyScope::apply($employees, $request->user());
+
+        $employees = $employees
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($inner) use ($search) {
                     $like = "%{$search}%";

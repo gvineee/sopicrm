@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Devices;
 
 use App\Domain\Companies\Models\Company;
 use App\Domain\Devices\Models\Site;
+use App\Domain\Devices\Support\CompanyScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Devices\AssignSiteCompanyRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,11 +21,20 @@ use Inertia\Response;
  */
 class SiteController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('viewAny', Site::class);
 
-        $sites = Site::query()
+        $sites = Site::query();
+
+        // Audit A14. Not reachable today — only `owner`/`system_admin` hold
+        // `devices.view` and both see every company by design — but that is a
+        // property of one seeder's grants, not of this query. Granting
+        // `devices.view` to a company-scoped role later would otherwise
+        // reopen the disclosure silently.
+        CompanyScope::apply($sites, $request->user());
+
+        $sites = $sites
             ->with('company:id,name')
             ->withCount('devices')
             ->orderByRaw('company_id is not null') // unmapped (NULL) first

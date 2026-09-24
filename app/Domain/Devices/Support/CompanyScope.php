@@ -3,6 +3,7 @@
 namespace App\Domain\Devices\Support;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * TENANT-01: the single shared visibility rule every company-scoped Policy
@@ -21,13 +22,89 @@ use App\Models\User;
  */
 final class CompanyScope
 {
+    /**
+     * Audit A14 asked for visibility to be checked with accounts of different
+     * companies, and checking it exposed the gap: `allows()` answers for ONE
+     * record, which is what a Policy needs, but a list endpoint builds its own
+     * query and never asks. The Employees roster listed every company's people
+     * to a company-scoped HR user as a result.
+     *
+     * This is the same rule expressed as a query constraint, so a list and the
+     * detail page it links to cannot disagree about what exists. Sites and
+     * Devices were not reachable that way today — only `owner`/`system_admin`
+     * hold `devices.view`, and both are org-wide here — but that safety rests
+     * entirely on a permission grant in a seeder, and a future grant to a
+     * company-scoped role would reopen it silently. They are filtered too.
+     *
+     * @param  Builder<TModel>  $query
+     * @param  string  $column  The record's own company column. Pass a closure
+     *                          via `applyToRelation()` when the company is
+     *                          inherited (a Device gets it from its Site).
+     * @return Builder<TModel>
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     */
+    public static function apply(Builder $query, User $user, string $column = 'company_id'): Builder
+    {
+        if (self::seesEveryCompany($user)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $inner) use ($user, $column): void {
+            // Unassigned records stay shared: scoping tightens what an
+            // assignment covers, it never hides data that was organization-wide
+            // before anyone was assigned.
+            $inner->whereNull($column);
+
+            if ($user->current_company_id !== null) {
+                $inner->orWhere($column, $user->current_company_id);
+            }
+        });
+    }
+
+    /**
+     * The inherited-company variant: the record has no company column of its
+     * own and takes one from a parent relation (a Device from its Site).
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     */
+    public static function applyThrough(Builder $query, User $user, string $relation, string $column = 'company_id'): Builder
+    {
+        if (self::seesEveryCompany($user)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $inner) use ($user, $relation, $column): void {
+            $inner->whereHas($relation, function (Builder $parent) use ($user, $column): void {
+                $parent->whereNull($column);
+
+                if ($user->current_company_id !== null) {
+                    $parent->orWhere($column, $user->current_company_id);
+                }
+            });
+
+            // A record whose parent is missing altogether has no company to be
+            // scoped by, so it behaves like an unassigned one rather than
+            // vanishing.
+            $inner->orWhereDoesntHave($relation);
+        });
+    }
+
+    public static function seesEveryCompany(User $user): bool
+    {
+        return $user->hasRole('owner') || $user->hasRole('system_admin');
+    }
+
     public static function allows(?string $recordCompanyId, User $user): bool
     {
         if ($recordCompanyId === null) {
             return true;
         }
 
-        if ($user->hasRole('owner') || $user->hasRole('system_admin')) {
+        if (self::seesEveryCompany($user)) {
             return true;
         }
 

@@ -11,6 +11,7 @@ use App\Domain\Devices\Models\DeviceCheckpoint;
 use App\Domain\Devices\Models\DeviceSyncCommand;
 use App\Domain\Devices\Models\Site;
 use App\Domain\Devices\Services\DeviceStatusResolver;
+use App\Domain\Devices\Support\CompanyScope;
 use App\Domain\Shared\Services\PortableSearch;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Devices\StoreDeviceRequest;
@@ -52,8 +53,15 @@ class DeviceController extends Controller
         // ~50 readers per organization, so resolving the whole set in PHP
         // before paginating stays correct and fast; it would need to move
         // to a SQL-computable status column before that assumption changes.
-        $rows = Device::query()
-            ->with('site')
+        $rows = Device::query()->with('site');
+
+        // Audit A14: a device has no company of its own — it inherits the one
+        // on its site (Device::resolvedCompanyId()), which is exactly what
+        // DevicePolicy::view() checks. The list has to ask the same question
+        // the detail page does, or it discloses the rows it then refuses.
+        CompanyScope::applyThrough($rows, $request->user(), 'site');
+
+        $rows = $rows
             ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
                 $like = "%{$search}%";
                 PortableSearch::where($query, 'name', $like);
