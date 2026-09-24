@@ -5,6 +5,8 @@ namespace App\Http\Resources\Tasks;
 use App\Domain\Shared\Models\Attachment;
 use App\Domain\Tasks\Models\Comment;
 use App\Domain\Tasks\Models\Task;
+use App\Domain\Tasks\Services\TaskQuantityLedger;
+use App\Domain\Tasks\Support\EvidenceKind;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -41,7 +43,12 @@ class TaskDetailResource extends JsonResource
             'unit' => $task->unit,
             'planned_quantity' => $task->planned_quantity,
             'accepted_quantity' => $task->accepted_quantity,
-            'self_close_allowed' => $task->self_close_allowed,
+            // §17: surfaced so the page can say
+            // „ისტორიული ჩანაწერი — ახალი წესით ვერიფიკაცია არ არის
+            // დადასტურებული" instead of presenting an old single-person
+            // closure as if it met the two-person rule.
+            'legacy_acceptance_unverified' => (bool) $task->legacy_acceptance_unverified,
+            'remaining_quantity' => app(TaskQuantityLedger::class)->availableScope($task),
             'requires_photo_evidence' => $task->requires_photo_evidence,
             'min_required_photos' => $task->min_required_photos,
             'blocked_reason' => $task->blocked_reason,
@@ -96,12 +103,24 @@ class TaskDetailResource extends JsonResource
                 // real preview URL — before this, a reviewer had no way to
                 // open what was actually submitted (TaskSubmission::photoAttachments()).
                 'photos' => $s->relationLoaded('photoAttachments') ? $s->photoAttachments->map(fn ($a) => $this->attachmentShape($task, $a)) : [],
+                'version' => $s->version,
+                // TM-02: asked about THIS submission, so a reviewer who
+                // performed the work covered by it never sees the buttons —
+                // even when they may review other submissions on this task.
                 'can' => [
-                    'accept' => $s->status === 'pending_review' && $user->can('acceptSubmission', $task),
-                    'return' => $s->status === 'pending_review' && $user->can('returnSubmission', $task),
+                    'accept' => $s->status === 'pending_review' && $user->can('acceptSubmission', [$task, $s]),
+                    'return' => $s->status === 'pending_review' && $user->can('returnSubmission', [$task, $s]),
                 ],
             ])),
-            'attachments' => $this->whenLoaded('attachments', fn () => $task->attachments->map(fn ($a) => $this->attachmentShape($task, $a))),
+            'attachments' => $this->whenLoaded('attachments', fn () => $task->attachments->map(fn ($a) => [
+                ...$this->attachmentShape($task, $a),
+                // TM-03: the submit form needs to know which of these files
+                // can be offered as evidence and which ones count toward the
+                // photo minimum, so the performer can pick rather than
+                // submit an empty evidence list and be refused.
+                'is_photo' => EvidenceKind::isPhoto($a),
+                'selectable_as_evidence' => $a->status === 'available',
+            ])),
             'comments' => $this->whenLoaded('comments', fn () => $task->comments->whereNull('parent_comment_id')->values()->map(fn ($c) => $this->commentShape($c))),
             'status_events' => $this->whenLoaded('statusEvents', fn () => $task->statusEvents->map(fn ($e) => [
                 'id' => $e->id,

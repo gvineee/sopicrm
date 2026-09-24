@@ -31,7 +31,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'download'])->name('projects.documents.download');
     Route::delete('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->name('projects.documents.destroy');
 
-    Route::prefix('projects/{project}/tasks')->name('projects.tasks.')->group(function (): void {
+    // TM-07/SEC-01 (03-Construction-Task-Manager-Spec-KA.md §13.2): scoped
+    // bindings resolve {task} through Project::tasks(), {submission} through
+    // Task::submissions(), {checklistItem} through Task::checklistItems() and
+    // {attachment} through Task::attachments(). A submission id from another
+    // task — or a task id from another project — therefore 404s at the
+    // binding, before any controller or Policy runs, instead of depending on
+    // each action remembering to re-check its own parent link.
+    Route::prefix('projects/{project}/tasks')->name('projects.tasks.')->scopeBindings()->group(function (): void {
         Route::get('/', [TaskController::class, 'index'])->name('index');
         Route::get('/create', [TaskController::class, 'create'])->name('create');
         Route::post('/', [TaskController::class, 'store'])->name('store');
@@ -50,7 +57,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('/{task}/reopen', [TaskController::class, 'reopen'])->name('reopen');
         Route::post('/{task}/dependencies', [TaskController::class, 'addDependency'])->name('dependencies.store');
         Route::post('/{task}/attachments', [TaskController::class, 'uploadAttachment'])->name('attachments.store');
-        Route::get('/{task}/attachments/{attachment}', [TaskController::class, 'showAttachment'])->name('attachments.show');
+        // Opted out of scoped binding on purpose: a submission's evidence is
+        // re-owned away from the Task at submission time (FILES-01), so
+        // resolving {attachment} through Task::attachments() would 404 on
+        // exactly the files a reviewer needs to open. The controller's own
+        // attachmentBelongsToTask() check covers both owners instead.
+        Route::get('/{task}/attachments/{attachment}', [TaskController::class, 'showAttachment'])
+            ->name('attachments.show')
+            ->withoutScopedBindings();
         Route::post('/{task}/comments', [TaskController::class, 'storeComment'])->name('comments.store');
         Route::patch('/{task}/checklist-items/{checklistItem}', [TaskController::class, 'toggleChecklistItem'])->name('checklist-items.update');
 

@@ -117,7 +117,13 @@ test('the generated PDF text layer contains the real Georgian employee name, not
         // xpdf's pdftotext prints its version and exits non-zero for -v in
         // some builds; only treat "command not found" (typically 127, or
         // any failure to execute at all) as truly unavailable.
-        test()->skip('pdftotext (poppler/xpdf) not available in this environment — cannot assert PDF glyph-level text extraction here. Verified manually during TIMESHEET-01 (docs/decisions.md DEC-086); re-enable this assertion wherever pdftotext is installed.');
+        // `$this->markTestSkipped()`, not `test()->skip()`: inside a test
+        // closure `test()` is not the running test case, so the intended skip
+        // died with "Call to undefined method Tests\TestCase::skip()" — i.e.
+        // on any machine without pdftotext this test ERRORED instead of
+        // skipping, which is exactly what the docblock above says it must not
+        // do.
+        $this->markTestSkipped('pdftotext (poppler/xpdf) not available in this environment — cannot assert PDF glyph-level text extraction here. Verified manually during TIMESHEET-01 (docs/decisions.md DEC-086); re-enable this assertion wherever pdftotext is installed.');
     }
 
     $response = $this->actingAs($this->finance)->get(route('timesheets.pdf', $this->timesheet));

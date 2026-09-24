@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Tasks;
 
+use App\Http\Requests\Concerns\CarriesWriteCommandEnvelope;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -11,6 +12,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class ReasonRequest extends FormRequest
 {
+    use CarriesWriteCommandEnvelope;
+
     public function authorize(): bool
     {
         return true;
@@ -23,6 +26,7 @@ class ReasonRequest extends FormRequest
     {
         return [
             'reason' => ['nullable', 'string', 'max:1000'],
+            ...$this->envelopeRules(),
         ];
     }
 }

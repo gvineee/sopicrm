@@ -7,6 +7,8 @@ use App\Domain\Employees\Models\Team;
 use App\Domain\Projects\Models\Project;
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskAssignee;
+use App\Domain\Tasks\Models\TaskSubmission;
+use App\Domain\Tasks\Services\ReviewerIndependence;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -110,36 +112,62 @@ class TaskPolicy
     }
 
     /**
-     * Final acceptance: normally a manager/reviewer with `tasks.tasks.accept`
-     * on the project. The one exception (spec explicit hard rule) is a task
-     * where the manager has pre-enabled `self_close_allowed` — then the
-     * accountable owner may accept their own submission. This method is the
-     * ONLY place that carve-out is authorized; App\Domain\Tasks\Actions\
-     * AcceptTaskSubmission does not re-check who is accepting.
+     * Final acceptance (03-Construction-Task-Manager-Spec-KA.md §1, TM-01):
+     * an authorized reviewer with `tasks.tasks.accept` on the project who is
+     * a DIFFERENT REAL PERSON from whoever performed the work.
+     *
+     * The previous `self_close_allowed` carve-out — which let the accountable
+     * owner accept their own submission whenever a manager had pre-enabled
+     * the flag — is gone. The column survives as a historical field (§17)
+     * but nothing in this workflow reads it any more. Removing it here is
+     * not enough on its own, so the reviewer-independence rule is also
+     * re-checked inside the accepting transaction (§13.2); see
+     * App\Domain\Tasks\Services\ReviewerIndependence.
+     *
+     * `$submission` is optional only so the Show page can ask the coarse
+     * "could this user ever review here" question when rendering. Every
+     * write path passes the specific submission, which is what makes the
+     * answer depend on who did THAT work rather than on who happens to be
+     * assigned to the task right now (TM-02).
      */
-    public function acceptSubmission(User $user, Task $task): bool
+    public function acceptSubmission(User $user, Task $task, ?TaskSubmission $submission = null): bool
     {
-        if ($task->organization_id !== $user->organization_id) {
-            return false;
-        }
-
-        $employee = $this->employeeOf($user);
-        if ($employee !== null && $task->accountable_owner_employee_id === $employee->id) {
-            return (bool) $task->self_close_allowed;
-        }
-
-        return $this->hasProjectAccess($user, $task->project, 'tasks.tasks.accept');
+        return $this->canReview($user, $task, $submission);
     }
 
     /**
-     * Returning a submission with a comment: always a reviewer/manager
-     * action — never the same employee who submitted it, self-close policy
-     * or not (there is nothing to "return" to yourself).
+     * Returning a submission with a comment is the same authority as
+     * accepting it, under the same independence rule: someone who worked on
+     * this submission cannot sit in judgement over it in either direction.
      */
-    public function returnSubmission(User $user, Task $task): bool
+    public function returnSubmission(User $user, Task $task, ?TaskSubmission $submission = null): bool
+    {
+        return $this->canReview($user, $task, $submission);
+    }
+
+    private function canReview(User $user, Task $task, ?TaskSubmission $submission): bool
     {
         if ($task->organization_id !== $user->organization_id) {
             return false;
+        }
+
+        // A performer of this task can never be its reviewer, whatever
+        // permissions or roles they also hold — holding many roles does not
+        // make one human into two independent people (§4).
+        if ($this->isPerformer($user, $task)) {
+            return false;
+        }
+
+        if ($submission !== null) {
+            // TM-07/SEC-01: a submission id from another task never grants
+            // review rights here, even for a reviewer authorized on this one.
+            if ($submission->task_id !== $task->id || $submission->organization_id !== $task->organization_id) {
+                return false;
+            }
+
+            if (app(ReviewerIndependence::class)->violationFor($submission, $user, $task) !== null) {
+                return false;
+            }
         }
 
         return $this->hasProjectAccess($user, $task->project, 'tasks.tasks.accept');
@@ -253,9 +281,17 @@ class TaskPolicy
         return Employee::query()->where('user_id', $user->id)->first();
     }
 
-    private function hasProjectAccess(User $user, Project $project, string $permission): bool
+    /**
+     * `$project` is nullable because every caller passes `$task->project`,
+     * which resolves through the tenant scope and therefore comes back null
+     * whenever the task's project is not readable in the current tenant
+     * context. An authorization check must answer that with "no" — the
+     * previous non-nullable signature turned it into a TypeError, which
+     * fails the request with a 500 instead of a clean denial.
+     */
+    private function hasProjectAccess(User $user, ?Project $project, string $permission): bool
     {
-        if ($project->organization_id !== $user->organization_id) {
+        if ($project === null || $project->organization_id !== $user->organization_id) {
             return false;
         }
 

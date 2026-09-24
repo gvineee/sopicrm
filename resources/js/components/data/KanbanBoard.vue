@@ -6,6 +6,12 @@
  * so dragging is never the only way to change a card's column (touch
  * devices and keyboard users need it too).
  *
+ * `#card-actions` is rendered ONCE PER DESTINATION COLUMN and is passed
+ * that column as `target` — content that ignores `target` is duplicated
+ * once per target (audit A16). Content that belongs to the card itself,
+ * not to a move (an "open" link, a badge), goes in `#card-footer`, which
+ * renders exactly once per card.
+ *
  * Presentational: emits `move` with the card and its destination column
  * key; the consumer performs the real server update (and reverts optimistic
  * state on failure/permission-denied/version-conflict).
@@ -90,6 +96,7 @@ function onDrop(columnKey: string) {
                             "
                             :target="target"
                         />
+                        <slot name="card-footer" :card="card" />
                     </div>
                 </div>
 

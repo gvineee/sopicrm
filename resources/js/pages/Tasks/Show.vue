@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,8 @@ type TaskAttachment = {
     classification?: string | null;
     status: string;
     url?: string | null;
+    is_photo?: boolean;
+    selectable_as_evidence?: boolean;
 };
 
 type Submission = {
@@ -36,6 +38,7 @@ type Submission = {
     submitted_by?: string | null;
     acceptance?: { accepted_quantity: string; accepted_at: string; notes?: string | null } | null;
     photos: TaskAttachment[];
+    version: number;
     can: { accept: boolean; return: boolean };
 };
 
@@ -50,6 +53,11 @@ type TaskDetail = {
     unit?: string | null;
     planned_quantity?: string | null;
     accepted_quantity?: string | null;
+    remaining_quantity?: string | null;
+    legacy_acceptance_unverified?: boolean;
+    requires_photo_evidence?: boolean;
+    min_required_photos?: number;
+    version: number;
     blocked_reason?: string | null;
     cancelled_reason?: string | null;
     reopened_reason?: string | null;
@@ -103,7 +111,14 @@ const blockForm = useForm({ reason: '', blocked_owner_employee_id: props.task.ac
 const unblockForm = useForm({ reason: '' });
 const cancelForm = useForm({ reason: '' });
 const reopenForm = useForm({ reason: '' });
-const submitForm = useForm<{ comment: string; submitted_quantity: string }>({ comment: '', submitted_quantity: '' });
+// TM-03: the page uploaded evidence but never told the server which files
+// the performer was offering, so `attachment_ids` always arrived empty and a
+// photo-required task could not be submitted from the web UI at all.
+const submitForm = useForm<{ comment: string; submitted_quantity: string; attachment_ids: string[] }>({
+    comment: '',
+    submitted_quantity: '',
+    attachment_ids: [],
+});
 const commentForm = useForm({ body: '' });
 const uploadForm = useForm<{ file: File | null; classification: string; caption: string }>({ file: null, classification: 'other', caption: '' });
 
@@ -128,16 +143,25 @@ function returnFormFor(id: string) {
     return returnForms[id];
 }
 
-function acceptSubmission(id: string) {
-    acceptFormFor(id)
-        .transform((d) => ({ ...d, accepted_quantity: d.accepted_quantity || null }))
-        .post(`${base}/submissions/${id}/accept`, { preserveScroll: true });
+// The submission version travels with the decision so a reviewer acting on a
+// stale page loses to whoever decided first, instead of silently overwriting
+// them (spec §13.2).
+function acceptSubmission(submission: Submission) {
+    acceptFormFor(submission.id)
+        .transform((d) => ({
+            ...d,
+            accepted_quantity: d.accepted_quantity || null,
+            expected_version: submission.version,
+        }))
+        .post(`${base}/submissions/${submission.id}/accept`, { preserveScroll: true });
 }
-function submitReturn(id: string) {
-    returnFormFor(id).post(`${base}/submissions/${id}/return`, {
-        preserveScroll: true,
-        onSuccess: () => { openReturn[id] = false; },
-    });
+function submitReturn(submission: Submission) {
+    returnFormFor(submission.id)
+        .transform((d) => ({ ...d, expected_version: submission.version }))
+        .post(`${base}/submissions/${submission.id}/return`, {
+            preserveScroll: true,
+            onSuccess: () => { openReturn[submission.id] = false; },
+        });
 }
 
 const checklistForms = reactive<Record<string, boolean>>({});
@@ -160,9 +184,23 @@ function uploadAttachment() {
         onSuccess: () => uploadForm.reset(),
     });
 }
+const selectableEvidence = computed(() => props.task.attachments.filter((a) => a.selectable_as_evidence));
+const selectedPhotoCount = computed(
+    () => selectableEvidence.value.filter((a) => a.is_photo && submitForm.attachment_ids.includes(a.id)).length,
+);
+const missingPhotoCount = computed(() =>
+    props.task.requires_photo_evidence
+        ? Math.max(0, (props.task.min_required_photos ?? 0) - selectedPhotoCount.value)
+        : 0,
+);
+
 function submitTask() {
     submitForm
-        .transform((d) => ({ ...d, submitted_quantity: d.submitted_quantity || null }))
+        .transform((d) => ({
+            ...d,
+            submitted_quantity: d.submitted_quantity || null,
+            expected_version: props.task.version,
+        }))
         .post(`${base}/submit`, { preserveScroll: true });
 }
 function addComment() {
@@ -190,6 +228,12 @@ function addComment() {
         </div>
         <div v-if="task.cancelled_reason" class="border-destructive/30 bg-destructive-soft/30 rounded-xl border p-4 text-sm">
             გაუქმებულია: {{ task.cancelled_reason }}
+        </div>
+        <!-- Spec §17: an old closure that cannot show two independent
+             confirmations keeps its status but is never presented as if it
+             met the current rule. -->
+        <div v-if="task.legacy_acceptance_unverified" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+            ისტორიული ჩანაწერი — ახალი წესით ვერიფიკაცია არ არის დადასტურებული.
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -259,12 +303,40 @@ function addComment() {
 
         <section v-if="task.can.submit" class="border-border bg-card rounded-xl border p-5">
             <h2 class="font-semibold">დასრულებაზე გაგზავნა</h2>
+            <p class="text-muted-foreground mt-1 text-sm">
+                მიუთითეთ <strong>ამჯერად</strong> შესრულებული მოცულობა, არა ჯამური.
+                <span v-if="task.remaining_quantity">დარჩენილია {{ task.remaining_quantity }} {{ task.unit || '' }}.</span>
+            </p>
             <form class="mt-3 grid gap-3 md:grid-cols-2" @submit.prevent="submitTask">
                 <textarea v-model="submitForm.comment" rows="2" placeholder="კომენტარი" class="border-input bg-background rounded-md border px-3 py-2 text-sm md:col-span-2" />
                 <Input v-model="submitForm.submitted_quantity" type="number" min="0" step="0.01" placeholder="შესრულებული მოცულობა" />
+
+                <!-- TM-03: pick the evidence that goes WITH this submission.
+                     Without it the request carried no attachment_ids at all,
+                     so a photo-required task could never be submitted here. -->
+                <div class="md:col-span-2">
+                    <p class="text-sm font-medium">მტკიცებულება</p>
+                    <p v-if="task.requires_photo_evidence" class="text-muted-foreground text-xs">
+                        საჭიროა მინიმუმ {{ task.min_required_photos }} ფოტო. PDF/დოკუმენტი ფოტოს ვერ ჩაანაცვლებს.
+                    </p>
+                    <div v-if="selectableEvidence.length" class="mt-2 grid gap-1 sm:grid-cols-2">
+                        <label v-for="file in selectableEvidence" :key="file.id" class="flex items-center gap-2 text-sm">
+                            <input v-model="submitForm.attachment_ids" type="checkbox" :value="file.id" />
+                            <span class="min-w-0 flex-1 truncate">{{ file.caption || file.original_filename }}</span>
+                            <span class="text-muted-foreground text-xs">{{ file.is_photo ? 'ფოტო' : 'დოკუმენტი' }}</span>
+                        </label>
+                    </div>
+                    <p v-else class="text-muted-foreground mt-2 text-sm">ჯერ ატვირთეთ ფაილი ქვემოთ, შემდეგ აირჩიეთ აქ.</p>
+                    <p v-if="missingPhotoCount > 0" class="text-destructive mt-2 text-sm">
+                        აირჩიეთ კიდევ {{ missingPhotoCount }} ფოტო.
+                    </p>
+                </div>
+
                 <p v-if="(submitForm.errors as Record<string, string>).attachments" class="text-destructive text-sm md:col-span-2">{{ (submitForm.errors as Record<string, string>).attachments }}</p>
                 <p v-if="(submitForm.errors as Record<string, string>).checklist" class="text-destructive text-sm md:col-span-2">{{ (submitForm.errors as Record<string, string>).checklist }}</p>
-                <Button type="submit" size="sm" class="w-fit" :disabled="submitForm.processing">გაგზავნა</Button>
+                <p v-if="(submitForm.errors as Record<string, string>).submitted_quantity" class="text-destructive text-sm md:col-span-2">{{ (submitForm.errors as Record<string, string>).submitted_quantity }}</p>
+                <p v-if="(submitForm.errors as Record<string, string>).status" class="text-destructive text-sm md:col-span-2">{{ (submitForm.errors as Record<string, string>).status }}</p>
+                <Button type="submit" size="sm" class="w-fit" :disabled="submitForm.processing || missingPhotoCount > 0">გაგზავნა</Button>
             </form>
         </section>
 
@@ -342,13 +414,16 @@ function addComment() {
                     </div>
 
                     <div v-if="submission.can.accept || submission.can.return" class="mt-2 flex flex-wrap gap-2">
-                        <form v-if="submission.can.accept" class="flex items-center gap-2" @submit.prevent="acceptSubmission(submission.id)">
+                        <form v-if="submission.can.accept" class="flex items-center gap-2" @submit.prevent="acceptSubmission(submission)">
                             <Input v-model="acceptFormFor(submission.id).accepted_quantity" type="number" min="0" step="0.01" placeholder="მიღებული მოცულობა" class="h-8 w-40" />
                             <Button type="submit" size="sm" :disabled="acceptFormFor(submission.id).processing">მიღება</Button>
                         </form>
                         <Button v-if="submission.can.return" type="button" size="sm" variant="outline" @click="openReturn[submission.id] = !openReturn[submission.id]">დაბრუნება</Button>
                     </div>
-                    <form v-if="openReturn[submission.id]" class="mt-2 flex items-center gap-2" @submit.prevent="submitReturn(submission.id)">
+                    <p v-else-if="submission.status === 'pending_review'" class="text-muted-foreground mt-2 text-xs">
+                        ამ გაგზავნას სჭირდება დამოუკიდებელი შემმოწმებელი — სამუშაოში მონაწილე პირი ვერ დაადასტურებს მას.
+                    </p>
+                    <form v-if="openReturn[submission.id]" class="mt-2 flex items-center gap-2" @submit.prevent="submitReturn(submission)">
                         <Input v-model="returnFormFor(submission.id).reason" placeholder="დაბრუნების მიზეზი" required class="h-8" />
                         <Button type="submit" size="sm" variant="outline" :disabled="returnFormFor(submission.id).processing">დადასტურება</Button>
                     </form>

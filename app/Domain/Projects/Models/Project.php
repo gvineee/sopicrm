@@ -8,6 +8,7 @@ use App\Domain\Devices\Models\Site;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Domain\Shared\Models\Attachment;
+use App\Domain\Tasks\Models\Task;
 use App\Models\User;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -127,6 +128,20 @@ class Project extends Model
     public function workPackages(): HasMany
     {
         return $this->hasMany(WorkPackage::class);
+    }
+
+    /**
+     * Exists so the nested task routes can use scoped route-model binding
+     * (`->scopeBindings()`): `/projects/{project}/tasks/{task}` then resolves
+     * the task THROUGH this relation, and a task id belonging to another
+     * project 404s at the binding instead of reaching a controller that
+     * might forget to re-check the parent link (TM-07/SEC-01).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
     }
 
     /**

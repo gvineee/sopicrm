@@ -6,6 +6,7 @@ use App\Domain\Employees\Models\Employee;
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Domain\Shared\Concerns\HasVersion;
 use App\Domain\Shared\Models\Attachment;
+use App\Models\User;
 use Database\Factories\TaskSubmissionFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,6 +27,10 @@ use Illuminate\Support\Carbon;
 /**
  * @property numeric-string|null $submitted_quantity
  * @property Carbon|null $submitted_at
+ * @property Carbon|null $client_submitted_at
+ * @property array{user_ids?: array<int, mixed>, employee_ids?: array<int, mixed>}|null $participant_snapshot
+ * @property array<int, array<string, mixed>>|null $checklist_snapshot
+ * @property array<int, array<string, mixed>>|null $evidence_snapshot
  */
 class TaskSubmission extends Model
 {
@@ -40,10 +45,16 @@ class TaskSubmission extends Model
         'organization_id',
         'task_id',
         'submitted_by_employee_id',
+        'submitted_by_user_id',
         'submitted_quantity',
         'comment',
         'photo_attachment_ids',
+        'participant_snapshot',
+        'checklist_snapshot',
+        'evidence_snapshot',
+        'task_version_at_submission',
         'submitted_at',
+        'client_submitted_at',
         'status',
         'returned_reason',
     ];
@@ -53,8 +64,20 @@ class TaskSubmission extends Model
         return [
             'submitted_quantity' => 'decimal:2',
             'photo_attachment_ids' => 'array',
+            'participant_snapshot' => 'array',
+            'checklist_snapshot' => 'array',
+            'evidence_snapshot' => 'array',
             'submitted_at' => 'datetime',
+            'client_submitted_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function submittedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by_user_id');
     }
 
     /**

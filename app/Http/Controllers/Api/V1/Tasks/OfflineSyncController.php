@@ -134,6 +134,12 @@ class OfflineSyncController extends Controller
                 $request->validated('comment'),
                 $request->validated('submitted_quantity'),
                 $request->validated('attachment_ids') ?? [],
+                $request->expectedVersion(),
+                // The device's own capture time, kept apart from the
+                // server's `submitted_at` and never substituted for it
+                // (§13.2). A queued item can be days old; that is exactly
+                // why both times are worth having.
+                $request->validated('client_submitted_at') ?? $request->string('client_created_at')->value() ?: null,
             );
         } catch (ValidationException $e) {
             // A `status` field error means the task's own state no longer

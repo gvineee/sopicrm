@@ -263,6 +263,8 @@ class TaskController extends Controller
                 $request->validated('comment'),
                 $request->validated('submitted_quantity'),
                 $request->validated('attachment_ids') ?? [],
+                $request->expectedVersion(),
+                $request->validated('client_submitted_at'),
             );
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
@@ -273,29 +275,48 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * 03-Construction-Task-Manager-Spec-KA.md §1: final acceptance takes two
+     * different real people. The Policy is asked about THIS submission, not
+     * merely about the task, so a reviewer who performed the work covered by
+     * it is refused even when they can review other submissions on the same
+     * task (TM-02). The parent `project -> task -> submission` chain is
+     * already guaranteed by the route group's scoped bindings (TM-07).
+     */
     public function acceptSubmission(AcceptTaskSubmissionRequest $request, Project $project, Task $task, TaskSubmission $submission, AcceptTaskSubmission $action): RedirectResponse
     {
-        $this->authorize('acceptSubmission', $task);
+        $this->authorize('acceptSubmission', [$task, $submission]);
 
         try {
-            $action->execute($submission, $request->user(), $request->validated('accepted_quantity'), $request->validated('notes'));
+            $action->execute(
+                $submission,
+                $request->user(),
+                $request->validated('accepted_quantity'),
+                $request->validated('notes'),
+                $request->expectedVersion(),
+                $request->idempotencyKey(),
+            );
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
         }
 
-        return back()->with('toast', ['type' => 'success', 'message' => 'დავალება მიღებულია.']);
+        return back()->with('toast', ['type' => 'success', 'message' => 'სამუშაო მიღებულია.']);
     }
 
     public function returnSubmission(ReasonRequest $request, Project $project, Task $task, TaskSubmission $submission, ReturnTaskSubmission $action): RedirectResponse
     {
-        $this->authorize('returnSubmission', $task);
+        $this->authorize('returnSubmission', [$task, $submission]);
 
         $reason = $request->validated('reason');
         if (! is_string($reason) || trim($reason) === '') {
             return back()->withErrors(['reason' => 'დაბრუნების მიზეზი სავალდებულოა.']);
         }
 
-        $action->execute($submission, $request->user(), $reason);
+        try {
+            $action->execute($submission, $request->user(), $reason, $request->expectedVersion(), $request->idempotencyKey());
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'დავალება დაბრუნებულია შესასრულებლად.']);
     }
@@ -382,11 +403,27 @@ class TaskController extends Controller
         return back()->with('toast', ['type' => 'success', 'message' => 'კომენტარი დაემატა.']);
     }
 
+    /**
+     * TM-09/EV-04: permission alone was not enough. A checklist that can
+     * still be edited while a reviewer is looking at the submission — or
+     * after the task is finished — means the answers on screen are not the
+     * answers that were submitted. The submitted answers are frozen in
+     * `task_submissions.checklist_snapshot`; this guard stops the live rows
+     * from drifting underneath a review or a closed task.
+     */
     public function toggleChecklistItem(ToggleChecklistItemRequest $request, Project $project, Task $task, ChecklistItem $checklistItem): RedirectResponse
     {
         $this->authorize('work', $task);
 
         abort_unless($checklistItem->task_id === $task->id, 404);
+
+        if (! in_array($task->status, ['draft', 'assigned', 'in_progress'], true)) {
+            return back()->withErrors([
+                'checklist' => $task->status === 'submitted'
+                    ? 'დავალება განხილვაშია — checklist-ის შეცვლა შეუძლებელია, სანამ შემმოწმებელი გადაწყვეტილებას მიიღებს.'
+                    : 'დასრულებულ/გაუქმებულ დავალებაზე checklist-ის შეცვლა შეუძლებელია.',
+            ]);
+        }
 
         $isChecked = (bool) $request->validated('is_checked');
 

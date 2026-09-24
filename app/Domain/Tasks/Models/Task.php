@@ -57,7 +57,11 @@ class Task extends Model
         'status',
         'blocked_reason',
         'blocked_owner_employee_id',
+        // §17: kept as a historical field only. No workflow reads it any
+        // more — final acceptance always takes two different real people
+        // (see App\Policies\TaskPolicy::acceptSubmission).
         'self_close_allowed',
+        'legacy_acceptance_unverified',
         'requires_photo_evidence',
         'min_required_photos',
         'progress_weight',
@@ -75,6 +79,7 @@ class Task extends Model
             'accepted_quantity' => 'decimal:2',
             'progress_weight' => 'decimal:4',
             'self_close_allowed' => 'boolean',
+            'legacy_acceptance_unverified' => 'boolean',
             'requires_photo_evidence' => 'boolean',
         ];
     }
@@ -157,6 +162,17 @@ class Task extends Model
     public function submissions(): HasMany
     {
         return $this->hasMany(TaskSubmission::class);
+    }
+
+    /**
+     * §8's acceptance ledger — the source of truth `accepted_quantity`
+     * caches.
+     *
+     * @return HasMany<TaskAcceptanceLedgerEntry, $this>
+     */
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(TaskAcceptanceLedgerEntry::class)->orderBy('recorded_at');
     }
 
     /**

@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'idempotency'])
     ->prefix('v1/projects/{project}/tasks/{task}')
     ->name('api.tasks.')
+    // TM-07: same scoped binding as the Inertia routes — a queued offline
+    // item replayed against another project's task id 404s at the binding.
+    ->scopeBindings()
     ->group(function (): void {
         Route::post('/offline-attachments', [OfflineSyncController::class, 'storeAttachment'])->name('offline-attachments.store');
         Route::post('/offline-submissions', [OfflineSyncController::class, 'storeSubmission'])->name('offline-submissions.store');
