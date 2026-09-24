@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import EmptyState from '@/components/states/EmptyState.vue';
+import { Button } from '@/components/ui/button';
 
 type EmployeeSummary = {
     id: string;
@@ -18,12 +19,17 @@ type AccessEvent = {
     direction?: string | null;
     event_code: string;
     occurred_at: string;
+    is_simulated?: boolean;
 };
 
-const props = defineProps<{
-    employee: EmployeeSummary | null;
-    recentAccessEvents: AccessEvent[];
-}>();
+const props = withDefaults(
+    defineProps<{
+        employee: EmployeeSummary | null;
+        recentAccessEvents: AccessEvent[];
+        canLinkAccounts?: boolean;
+    }>(),
+    { canLinkAccounts: false },
+);
 
 defineOptions({ layout: { mobileTitle: 'ჩემი პროფილი' } });
 
@@ -42,11 +48,28 @@ function directionLabel(event: AccessEvent): string {
             <p class="text-muted-foreground text-sm">თქვენი პირადი სამუშაო ინფორმაცია.</p>
         </div>
 
-        <EmptyState
-            v-if="!employee"
-            title="თანამშრომლის ჩანაწერთან დაკავშირება არ არის"
-            description="თქვენი ანგარიშისთვის თანამშრომლის პროფილი ჯერ არ არის მიბმული. მიმართეთ HR-ს."
-        />
+        <!-- Audit A11: this used to end at "მიმართეთ HR-ს", which is a dead
+             end — especially for an administrator, who is exactly the person
+             able to fix it. Now it names the next step for whoever is
+             reading, and always offers somewhere to go. -->
+        <div v-if="!employee" class="flex flex-col gap-3">
+            <EmptyState
+                title="თანამშრომლის ჩანაწერთან დაკავშირება არ არის"
+                :description="
+                    canLinkAccounts
+                        ? 'თქვენი ანგარიში ჯერ არ არის მიბმული თანამშრომლის ჩანაწერზე. იპოვეთ თქვენი ჩანაწერი თანამშრომლების სიაში და გამოიყენეთ „არსებული ანგარიშის დაკავშირება“.'
+                        : 'თქვენი ანგარიში ჯერ არ არის მიბმული თანამშრომლის ჩანაწერზე. მიმართეთ HR-ს — მიბმის გარეშე ამ გვერდზე პირადი სამუშაო ინფორმაცია არ გამოჩნდება.'
+                "
+            />
+            <div class="flex flex-wrap justify-center gap-2">
+                <Link v-if="canLinkAccounts" href="/employees">
+                    <Button variant="outline">თანამშრომლების სია</Button>
+                </Link>
+                <Link href="/dashboard">
+                    <Button variant="ghost">მთავარ გვერდზე</Button>
+                </Link>
+            </div>
+        </div>
 
         <template v-else>
             <section class="border-border bg-card rounded-xl border p-5">
@@ -77,7 +100,18 @@ function directionLabel(event: AccessEvent): string {
                 <EmptyState v-if="!recentAccessEvents.length" class="mt-3" title="ჩანაწერი ჯერ არ არის" />
                 <div v-else class="mt-3 space-y-2 text-sm">
                     <div v-for="event in recentAccessEvents" :key="event.id" class="flex items-center justify-between rounded-lg border p-3">
-                        <span>{{ directionLabel(event) }} · {{ event.device_name || 'უცნობი მოწყობილობა' }}</span>
+                        <span class="flex items-center gap-2">
+                            <span>{{ directionLabel(event) }} · {{ event.device_name || 'უცნობი მოწყობილობა' }}</span>
+                            <!-- Audit A04: a generated swipe shown next to a
+                                 real one, with nothing to tell them apart, is
+                                 how a person concludes the system recorded an
+                                 arrival that never happened. -->
+                            <span
+                                v-if="event.is_simulated"
+                                class="border-warning/40 bg-warning/10 text-warning-foreground rounded-full border px-2 py-0.5 text-[11px]"
+                                >სატესტო — ნამუშევარ დროში არ ითვლება</span
+                            >
+                        </span>
                         <span class="text-muted-foreground">{{ new Date(event.occurred_at).toLocaleString('ka-GE') }}</span>
                     </div>
                 </div>

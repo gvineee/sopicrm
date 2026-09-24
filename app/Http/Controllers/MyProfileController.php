@@ -53,6 +53,14 @@ class MyProfileController extends Controller
                     'direction' => $event->reader_direction_snapshot,
                     'event_code' => $event->event_code,
                     'occurred_at' => $event->normalized_event_time_utc->toIso8601String(),
+                    // Audit A04: this list is raw events, so it still shows
+                    // simulated ones — they are excluded from worked-time
+                    // reconstruction, not hidden from history. Showing a
+                    // generated swipe next to a real one with nothing to tell
+                    // them apart is how a person concludes the system recorded
+                    // an arrival that never happened.
+                    'is_simulated' => $event->ingestion_source === RawAccessEvent::SOURCE_SIMULATOR
+                        || ($event->payload['source'] ?? null) === RawAccessEvent::SOURCE_SIMULATOR,
                 ])
                 ->all();
         }
@@ -70,6 +78,11 @@ class MyProfileController extends Controller
                 'status' => $employee->status,
             ],
             'recentAccessEvents' => $recentAccessEvents,
+            // Audit A11: an unlinked account used to be told only "მიმართეთ
+            // HR-ს", which is a dead end for the very people most likely to
+            // see it — administrators, who ARE the ones who can fix it. This
+            // says whether the viewer can do the linking themselves.
+            'canLinkAccounts' => $request->user()->can('employees.invites.manage'),
         ]);
     }
 }

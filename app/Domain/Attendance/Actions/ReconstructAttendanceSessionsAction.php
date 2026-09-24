@@ -239,6 +239,16 @@ class ReconstructAttendanceSessionsAction
             ->pluck('target_id', 'external_identifier');
 
         return RawAccessEvent::query()
+            // Audit A04: „Simulator-ის შედეგები არ უნდა მონაწილეობდეს რეალურ
+            // ტაბელსა და ხელფასში." This is the one place that has to enforce
+            // it, because everything downstream reads sessions rather than raw
+            // events: sessions become TimesheetLines
+            // (App\Domain\Timesheets\Actions\BuildTimesheetLinesForSessionAction)
+            // and those become money (App\Domain\Payroll\Actions\CalculatePayRunAction).
+            // Before this, two clicks of the simulator's "generate test event"
+            // button produced a real paid session within five minutes, with
+            // nothing at any later stage able to tell it from a real badge read.
+            ->excludingSimulated()
             ->where(function ($query) use ($credentialIds, $confirmedRefsByCredentialId): void {
                 $query->whereIn('credential_id', $credentialIds);
 
