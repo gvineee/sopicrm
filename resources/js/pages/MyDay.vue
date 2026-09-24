@@ -7,7 +7,7 @@
  * (App\Http\Controllers\Tasks\TaskController) — no new mobile-only business
  * logic, per the ticket's own instruction.
  */
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, Clock, PlayCircle, RotateCcw } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import BottomSheet from '@/components/mobile/BottomSheet.vue';
@@ -44,6 +44,7 @@ type DayTask = {
 const props = withDefaults(
     defineProps<{
         hasEmployeeRecord: boolean;
+        canLinkAccounts?: boolean;
         today: DayTask[];
         overdue: DayTask[];
         inReview: DayTask[];
@@ -55,6 +56,7 @@ const props = withDefaults(
     }>(),
     {
         hasEmployeeRecord: true,
+        canLinkAccounts: false,
         today: () => [],
         overdue: () => [],
         inReview: () => [],
@@ -434,6 +436,29 @@ function reportBlocker() {
                 <template v-if="hasEmployeeRecord">დღეს გაქვთ {{ totalActionable }} დავალება.</template>
                 <template v-else>თქვენს ანგარიშს არ აქვს დაკავშირებული თანამშრომლის ჩანაწერი.</template>
             </p>
+        </div>
+
+        <!-- Audit A11: an unlinked account used to get this sentence and
+             nothing else — no explanation of what it means, no way forward.
+             It now names the next step for whoever is reading it, and always
+             offers a page that does work for them. -->
+        <div v-if="!hasEmployeeRecord" class="flex flex-col gap-3">
+            <EmptyState
+                title="ანგარიში თანამშრომელს არ უკავშირდება"
+                :description="
+                    canLinkAccounts
+                        ? 'დავალებები თანამშრომლის ჩანაწერზეა მიბმული, თქვენი ანგარიში კი ჯერ არცერთზე. იპოვეთ თქვენი ჩანაწერი თანამშრომლების სიაში და გამოიყენეთ „არსებული ანგარიშის დაკავშირება“.'
+                        : 'დავალებები თანამშრომლის ჩანაწერზეა მიბმული, თქვენი ანგარიში კი ჯერ არცერთზე. მიმართეთ HR-ს, რომ დაგიკავშირდეთ — მანამდე აქ დავალებები ვერ გამოჩნდება.'
+                "
+            />
+            <div class="flex flex-wrap justify-center gap-2">
+                <Link v-if="canLinkAccounts" href="/employees">
+                    <Button variant="outline">თანამშრომლების სია</Button>
+                </Link>
+                <Link href="/dashboard">
+                    <Button variant="ghost">მთავარ გვერდზე</Button>
+                </Link>
+            </div>
         </div>
 
         <div v-if="usingCachedSnapshot" class="flex flex-col gap-3">

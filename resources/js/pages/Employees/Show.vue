@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import EntityPicker from '@/components/EntityPicker.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -99,6 +101,10 @@ const terminationForm = useForm({
     end_reason: '',
 });
 const inviteForm = useForm({});
+// Audit A11: attaching an account this person ALREADY has, as opposed to the
+// invite above, which creates a new one.
+const linkForm = useForm({ user_id: '' });
+const linkLabel = ref<string | null>(null);
 const documentForm = useForm<{ file: File | null; caption: string }>({
     file: null,
     caption: '',
@@ -530,6 +536,57 @@ function uploadPhoto(event: Event) {
                             : 'მოწვევის შექმნა'
                     }}</Button
                 >
+
+                <!-- Audit A11. The invite above creates a NEW account; this
+                     attaches one the person already has. Without it, anyone
+                     who already had a login — the person who set the
+                     organization up, any administrator — could never be
+                     connected to their own employee record, so „ჩემი დღე"
+                     and „ჩემი პროფილი" stayed empty for them forever. -->
+                <div class="border-border mt-6 border-t pt-5">
+                    <h3 class="text-sm font-semibold">
+                        არსებული ანგარიშის დაკავშირება
+                    </h3>
+                    <p class="text-muted-foreground mt-1 text-xs">
+                        თუ ამ ადამიანს უკვე აქვს ანგარიში, მოწვევის ნაცვლად
+                        დააკავშირეთ იგი პირდაპირ. ერთ ანგარიშს მხოლოდ ერთი
+                        თანამშრომლის ჩანაწერი შეესაბამება.
+                    </p>
+                    <form
+                        class="mt-3 grid gap-3"
+                        @submit.prevent="
+                            linkForm.post(
+                                `/employees/${employee.id}/user-link`,
+                            )
+                        "
+                    >
+                        <div class="grid gap-2">
+                            <Label for="link-user">ანგარიში</Label>
+                            <EntityPicker
+                                id="link-user"
+                                v-model="linkForm.user_id"
+                                v-model:selected-label="linkLabel"
+                                :endpoint="`/employees/${employee.id}/user-link/options`"
+                                placeholder="მოძებნეთ სახელით ან ელფოსტით"
+                                empty-text="თავისუფალი ანგარიში ვერ მოიძებნა"
+                            />
+                            <p
+                                v-if="linkForm.errors.user_id"
+                                class="text-destructive text-xs"
+                            >
+                                {{ linkForm.errors.user_id }}
+                            </p>
+                        </div>
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            :disabled="
+                                linkForm.processing || !linkForm.user_id
+                            "
+                            >ანგარიშის დაკავშირება</Button
+                        >
+                    </form>
+                </div>
             </section>
             <section
                 v-if="canTerminate"

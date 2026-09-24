@@ -5,6 +5,7 @@ use App\Http\Controllers\Employees\EmployeeDocumentController;
 use App\Http\Controllers\Employees\EmployeeInviteController;
 use App\Http\Controllers\Employees\EmployeePhotoController;
 use App\Http\Controllers\Employees\EmployeeProjectAssignmentController;
+use App\Http\Controllers\Employees\EmployeeUserLinkController;
 use App\Http\Controllers\Employees\EmploymentController;
 use App\Http\Controllers\Employees\InviteAcceptController;
 use App\Http\Controllers\Employees\PositionController;
@@ -23,6 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     Route::post('employees/{employee}/rates', [RateHistoryController::class, 'store'])->name('employees.rates.store');
     Route::post('employees/{employee}/invites', [EmployeeInviteController::class, 'store'])->name('employees.invites.store');
+    // Audit A11 — attaching an EXISTING account to this employee. The invite
+    // route above creates a new one; without this, anyone who already had a
+    // login could never be connected to their own employee record.
+    Route::get('employees/{employee}/user-link/options', [EmployeeUserLinkController::class, 'options'])->name('employees.user-link.options');
+    Route::post('employees/{employee}/user-link', [EmployeeUserLinkController::class, 'store'])->name('employees.user-link.store');
     Route::delete('employee-invites/{invite}', [EmployeeInviteController::class, 'destroy'])->name('employees.invites.destroy');
     Route::post('employees/{employee}/termination', [EmploymentController::class, 'store'])->name('employees.termination.store');
     Route::post('employees/{employee}/team-membership', [TeamMembershipController::class, 'store'])->name('employees.team-membership.store');

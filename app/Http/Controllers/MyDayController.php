@@ -34,6 +34,10 @@ class MyDayController extends Controller
         if ($employee === null) {
             return Inertia::render('MyDay', [
                 'hasEmployeeRecord' => false,
+                // Audit A11: whether the person reading this dead end is able
+                // to resolve it themselves. Administrators usually are, and
+                // used to be told to ask someone else.
+                'canLinkAccounts' => $user->can('employees.invites.manage'),
                 'today' => [],
                 'overdue' => [],
                 'inReview' => [],
@@ -97,6 +101,7 @@ class MyDayController extends Controller
 
         return Inertia::render('MyDay', [
             'hasEmployeeRecord' => true,
+            'canLinkAccounts' => $user->can('employees.invites.manage'),
             ...$buckets,
             'employees' => Employee::query()
                 ->where('organization_id', $user->organization_id)
