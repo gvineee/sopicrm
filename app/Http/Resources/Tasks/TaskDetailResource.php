@@ -6,6 +6,7 @@ use App\Domain\Shared\Models\Attachment;
 use App\Domain\Tasks\Models\Comment;
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Services\TaskQuantityLedger;
+use App\Domain\Tasks\Services\TaskReadiness;
 use App\Domain\Tasks\Support\EvidenceKind;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -131,10 +132,14 @@ class TaskDetailResource extends JsonResource
                 'actor_name' => $e->relationLoaded('actor') ? $e->actor?->name : null,
             ])),
             'version' => $task->version,
+            // §9.1/§9.2: which predecessors are still in the way. Sent so the
+            // page can say WHY starting is refused, instead of the person
+            // finding out by pressing the button.
+            'readiness' => app(TaskReadiness::class)->summaryFor($task),
             'can' => [
                 'update' => $user->can('update', $task),
                 'assign' => $task->status === 'draft' && $user->can('assign', $task),
-                'start' => $task->status === 'assigned' && $user->can('work', $task),
+                'start' => $task->status === 'assigned' && $user->can('work', $task) && app(TaskReadiness::class)->isReady($task),
                 'block' => in_array($task->status, ['assigned', 'in_progress'], true) && $user->can('block', $task),
                 'unblock' => $task->status === 'blocked' && $user->can('unblock', $task),
                 'submit' => $task->status === 'in_progress' && $user->can('submit', $task),

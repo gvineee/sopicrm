@@ -59,6 +59,13 @@ type TaskDetail = {
     requires_photo_evidence?: boolean;
     min_required_photos?: number;
     version: number;
+    // §9.1/§9.2: which predecessors are still in the way, so the page can say
+    // why starting is refused rather than silently omitting the button.
+    readiness?: {
+        is_ready: boolean;
+        blocked_by: Array<{ id: string; project_id: string; title: string; status: string }>;
+    };
+
     blocked_reason?: string | null;
     cancelled_reason?: string | null;
     reopened_reason?: string | null;
@@ -235,6 +242,26 @@ function addComment() {
              met the current rule. -->
         <div v-if="task.legacy_acceptance_unverified" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
             ისტორიული ჩანაწერი — ახალი წესით ვერიფიკაცია არ არის დადასტურებული.
+        </div>
+
+        <!-- §9.1/§9.2: a predecessor merely „წარდგენილია" is not
+             „მიღებულია". Hiding the start button without saying why leaves a
+             foreman on site pressing a button that is not there; this names
+             the work still in the way. -->
+        <div
+            v-if="task.readiness && !task.readiness.is_ready && task.status === 'assigned'"
+            class="border-warning bg-warning/10 rounded-lg border p-3 text-sm"
+        >
+            <p class="font-medium">დაწყება ჯერ შეუძლებელია</p>
+            <p class="text-muted-foreground mt-1">
+                ჯერ უნდა დასრულდეს და მიღებულ იქნას:
+            </p>
+            <ul class="mt-1 list-inside list-disc">
+                <li v-for="blocker in task.readiness.blocked_by" :key="blocker.id">
+                    <Link :href="`/projects/${blocker.project_id}/tasks/${blocker.id}`" class="underline">{{ blocker.title }}</Link>
+                    <span class="text-muted-foreground"> — {{ STATUS_LABEL[blocker.status] || blocker.status }}</span>
+                </li>
+            </ul>
         </div>
 
         <div class="flex flex-wrap gap-2">
