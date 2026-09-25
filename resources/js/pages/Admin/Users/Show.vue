@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
 import { userRoleLabel } from '@/lib/labels';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
 import type { StatusTone } from '@/types';
@@ -47,6 +47,80 @@ const SOURCE_TONE: Record<string, StatusTone> = {
 const availableRolesToAssign = computed(() => props.roles.filter((role) => !props.assignedRoles.includes(role)));
 
 const allPermissionNames = computed(() => props.permissionGroups.flatMap((group) => group.permissions));
+
+/**
+ * Audit A23: „გრძელი ტექნიკური permission-ების სიებია … საჭიროა ქართულად
+ * დასათაურებული ჯგუფები, ძიება და წვდომის წყაროს ახსნა."
+ *
+ * The module prefix already had a Georgian name server-side
+ * (App\Domain\Auth\Support\PermissionGroups), but it was flattened away before
+ * rendering, so the screen was one unsearchable list of strings like
+ * `tasks.tasks.accept` in a monospace font.
+ *
+ * A permission name is `<module>.<subject>.<action>`. The module is named by
+ * the server; the action is the part that tells a human what the permission
+ * actually lets someone do, so it is named here. The raw name is still shown —
+ * an administrator comparing against a policy needs the exact string — but it
+ * is no longer the only thing on the row.
+ */
+const ACTION_LABEL: Record<string, string> = {
+    view: 'ნახვა',
+    viewAny: 'სიის ნახვა',
+    create: 'შექმნა',
+    update: 'რედაქტირება',
+    manage: 'მართვა',
+    delete: 'წაშლა',
+    accept: 'მიღება',
+    approve: 'დამტკიცება',
+    reject: 'უარყოფა',
+    cancel: 'გაუქმება',
+    reopen: 'ხელახლა გახსნა',
+    submit: 'გაგზავნა',
+    export: 'ექსპორტი',
+    lock: 'ჩაკეტვა',
+    terminate: 'დასრულება',
+    ingest: 'მონაცემის მიღება',
+};
+
+function actionLabel(permission: string): string {
+    const action = permission.split('.').pop() ?? '';
+
+    return ACTION_LABEL[action] ?? action;
+}
+
+const search = ref('');
+
+function matchesSearch(row: EffectivePermission): boolean {
+    const term = search.value.trim().toLowerCase();
+    if (term === '') return true;
+
+    // Searched by raw name, by Georgian group and by Georgian action, because
+    // an administrator may be looking for any of the three.
+    return (
+        row.permission.toLowerCase().includes(term) ||
+        row.group.toLowerCase().includes(term) ||
+        actionLabel(row.permission).toLowerCase().includes(term)
+    );
+}
+
+/** The flat list, regrouped under the Georgian heading it already carried. */
+const groupedPermissions = computed(() => {
+    const groups = new Map<string, EffectivePermission[]>();
+
+    for (const row of props.effectivePermissions) {
+        if (!matchesSearch(row)) continue;
+
+        const rows = groups.get(row.group) ?? [];
+        rows.push(row);
+        groups.set(row.group, rows);
+    }
+
+    return Array.from(groups.entries())
+        .map(([label, rows]) => ({ label, rows }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'ka-GE'));
+});
+
+const matchCount = computed(() => groupedPermissions.value.reduce((sum, group) => sum + group.rows.length, 0));
 
 const assignRoleForm = useForm({ role: '' });
 function submitAssignRole() {
@@ -135,7 +209,9 @@ function submitDeny() {
             <form class="grid gap-2 md:grid-cols-[1fr_auto]" @submit.prevent="submitGrant">
                 <select v-model="grantForm.permission" required class="border-input bg-background h-9 rounded-md border px-3 text-sm">
                     <option value="" disabled>უფლების პირდაპირ მინიჭება...</option>
-                    <option v-for="permission in allPermissionNames" :key="permission" :value="permission">{{ permission }}</option>
+                    <option v-for="permission in allPermissionNames" :key="permission" :value="permission">
+                        {{ actionLabel(permission) }} — {{ permission }}
+                    </option>
                 </select>
                 <Button type="submit" size="sm" :disabled="grantForm.processing">მინიჭება</Button>
             </form>
@@ -143,7 +219,9 @@ function submitDeny() {
             <form class="grid gap-2 md:grid-cols-[1fr_1fr_auto]" @submit.prevent="submitDeny">
                 <select v-model="denyForm.permission" required class="border-input bg-background h-9 rounded-md border px-3 text-sm">
                     <option value="" disabled>უფლების აღკვეთა...</option>
-                    <option v-for="permission in allPermissionNames" :key="permission" :value="permission">{{ permission }}</option>
+                    <option v-for="permission in allPermissionNames" :key="permission" :value="permission">
+                        {{ actionLabel(permission) }} — {{ permission }}
+                    </option>
                 </select>
                 <input
                     v-model="denyForm.reason"
@@ -162,37 +240,54 @@ function submitDeny() {
             <p class="text-muted-foreground text-sm">
                 ყველა უფლება, რომელიც ამ მომხმარებელს რეალურად აქვს (ან რომელიც აღკვეთილია), წყაროს მითითებით.
             </p>
-            <div class="divide-border divide-y">
-                <div
-                    v-for="row in effectivePermissions"
-                    :key="row.permission"
-                    class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
-                >
-                    <div class="min-w-0">
-                        <p class="truncate font-mono text-xs">{{ row.permission }}</p>
-                        <p class="text-muted-foreground text-xs">
-                            {{ row.group }}<template v-if="row.via_role"> · {{ userRoleLabel(row.via_role) }}</template>
-                        </p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <StatusBadge :label="SOURCE_LABEL[row.source] || row.source" :tone="SOURCE_TONE[row.source] || 'neutral'" />
-                        <Button
-                            v-if="canManageOverrides && row.source === 'direct_grant'"
-                            variant="ghost"
-                            size="sm"
-                            @click="submitRevoke(row.permission)"
-                            >მოხსნა</Button
-                        >
-                        <Button
-                            v-if="canManageOverrides && row.source === 'denied' && row.denial_id"
-                            variant="ghost"
-                            size="sm"
-                            @click="submitRemoveDenial(row.denial_id)"
-                            >აღკვეთის მოხსნა</Button
-                        >
+            <input
+                v-model="search"
+                type="search"
+                placeholder="ძიება: უფლება, მოდული ან მოქმედება"
+                class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            />
+            <p v-if="search.trim() !== ''" class="text-muted-foreground text-xs">ნაპოვნია {{ matchCount }} უფლება</p>
+
+            <div v-for="group in groupedPermissions" :key="group.label" class="mt-2">
+                <h3 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{{ group.label }}</h3>
+                <div class="divide-border divide-y">
+                    <div
+                        v-for="row in group.rows"
+                        :key="row.permission"
+                        class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                    >
+                        <div class="min-w-0">
+                            <p class="truncate">{{ actionLabel(row.permission) }}</p>
+                            <!-- The exact string stays visible: an administrator
+                                 comparing this against a policy needs it. -->
+                            <p class="text-muted-foreground truncate font-mono text-[11px]">
+                                {{ row.permission }}<template v-if="row.via_role"> · {{ userRoleLabel(row.via_role) }}</template>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <StatusBadge :label="SOURCE_LABEL[row.source] || row.source" :tone="SOURCE_TONE[row.source] || 'neutral'" />
+                            <Button
+                                v-if="canManageOverrides && row.source === 'direct_grant'"
+                                variant="ghost"
+                                size="sm"
+                                @click="submitRevoke(row.permission)"
+                                >მოხსნა</Button
+                            >
+                            <Button
+                                v-if="canManageOverrides && row.source === 'denied' && row.denial_id"
+                                variant="ghost"
+                                size="sm"
+                                @click="submitRemoveDenial(row.denial_id)"
+                                >აღკვეთის მოხსნა</Button
+                            >
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <p v-if="groupedPermissions.length === 0" class="text-muted-foreground py-3 text-sm">
+                ამ ძიებით უფლება ვერ მოიძებნა.
+            </p>
         </section>
     </div>
 </template>
