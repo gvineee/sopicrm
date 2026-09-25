@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { employeeStatusLabel } from '@/lib/labels';
 import { ref } from 'vue';
 import EntityPicker from '@/components/EntityPicker.vue';
 import { Button } from '@/components/ui/button';
@@ -270,7 +271,7 @@ function uploadPhoto(event: Event) {
                     </div>
                     <div>
                         <dt class="text-muted-foreground">სტატუსი</dt>
-                        <dd>{{ employee.status }}</dd>
+                        <dd>{{ employeeStatusLabel(employee.status) }}</dd>
                     </div>
                     <div>
                         <dt class="text-muted-foreground">ანგარიში</dt>

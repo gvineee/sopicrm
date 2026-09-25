@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { attendanceAnomalyLabel, attendanceSessionStatusLabel, formatDate, formatDateTime } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
 
@@ -52,8 +53,8 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
         <div>
             <Link href="/attendance/sessions" class="text-muted-foreground text-sm hover:underline">← სესიები</Link>
             <div class="mt-2 flex items-center gap-3">
-                <h1 class="text-2xl font-semibold">{{ session.employee_name }} — {{ session.work_date }}</h1>
-                <StatusBadge :label="session.status" :tone="statusTone(session.status)" />
+                <h1 class="text-2xl font-semibold">{{ session.employee_name }} — {{ formatDate(session.work_date) }}</h1>
+                <StatusBadge :label="attendanceSessionStatusLabel(session.status)" :tone="statusTone(session.status)" />
             </div>
         </div>
 
@@ -68,11 +69,11 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
             </div>
             <div>
                 <p class="text-muted-foreground text-xs">შემოსვლა</p>
-                <p class="font-medium">{{ session.clock_in_at ?? '—' }}</p>
+                <p class="font-medium">{{ formatDateTime(session.clock_in_at) }}</p>
             </div>
             <div>
                 <p class="text-muted-foreground text-xs">გასვლა</p>
-                <p class="font-medium">{{ session.clock_out_at ?? 'ღიაა (გასვლის მონაცემი არ არის)' }}</p>
+                <p class="font-medium">{{ formatDateTime(session.clock_out_at, 'ღიაა (გასვლის მონაცემი არ არის)') }}</p>
             </div>
             <div>
                 <p class="text-muted-foreground text-xs">სრული ხანგრძლივობა</p>
@@ -98,8 +99,8 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
             <div v-else class="border-border bg-card divide-border divide-y overflow-hidden rounded-xl border">
                 <div v-for="anomaly in anomalies" :key="anomaly.id" class="flex items-center justify-between p-3">
                     <div>
-                        <p class="font-medium">{{ anomaly.anomaly_type }}</p>
-                        <p class="text-muted-foreground text-xs">{{ anomaly.detected_at }}</p>
+                        <p class="font-medium">{{ attendanceAnomalyLabel(anomaly.anomaly_type) }}</p>
+                        <p class="text-muted-foreground text-xs">{{ formatDateTime(anomaly.detected_at) }}</p>
                     </div>
                     <StatusBadge :label="anomaly.resolved_at ? 'მოგვარებული' : 'აქტიური'" :tone="anomaly.resolved_at ? 'success' : 'warning'" />
                 </div>

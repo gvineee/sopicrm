@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { payRunStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/states/EmptyState.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -38,7 +39,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
     <div class="flex h-full flex-1 flex-col gap-5 p-4 md:p-6">
         <div>
             <h1 class="text-2xl font-semibold">ანგარიშსწორებები</h1>
-            <p class="text-muted-foreground text-sm">draft → calculated → reviewed → approved → locked.</p>
+            <p class="text-muted-foreground text-sm">შავი ვარიანტი → გამოთვლილი → გადამოწმებული → დამტკიცებული → ჩაკეტილი.</p>
         </div>
 
         <form v-if="canCreate" class="border-border bg-card flex flex-wrap items-end gap-3 rounded-xl border p-5" @submit.prevent="submit">
@@ -64,7 +65,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
                 >
                     <p class="font-medium">{{ payRun.pay_period?.starts_on }} – {{ payRun.pay_period?.ends_on }}</p>
                     <p class="text-muted-foreground text-sm">{{ payRun.lines_sum_net_amount ?? '0.00' }} GEL</p>
-                    <StatusBadge :label="payRun.status" :tone="statusTone(payRun.status)" />
+                    <StatusBadge :label="payRunStatusLabel(payRun.status)" :tone="statusTone(payRun.status)" />
                 </Link>
             </div>
         </div>

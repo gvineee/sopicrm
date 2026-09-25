@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { assetTrackingTypeLabel } from '@/lib/labels';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,7 +94,7 @@ function applyFilters() {
                         <p class="truncate font-medium">{{ asset.name }}</p>
                         <p class="text-muted-foreground truncate text-sm">{{ asset.category }} · {{ asset.inventory_code }}</p>
                     </div>
-                    <p class="text-muted-foreground text-sm">{{ asset.tracking_type }}</p>
+                    <p class="text-muted-foreground text-sm">{{ assetTrackingTypeLabel(asset.tracking_type) }}</p>
                     <StatusBadge :label="conditionLabel[asset.condition] ?? asset.condition" :tone="conditionTone[asset.condition] ?? 'neutral'" />
                     <StatusBadge
                         v-if="asset.active_custody_status"

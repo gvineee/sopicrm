@@ -7,6 +7,7 @@
  * full page reload while a batch is still resolving.
  */
 import { onMounted, ref } from 'vue';
+import { emailDeliveryStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
 
@@ -129,7 +130,7 @@ onMounted(load);
                 <div v-for="delivery in batch.deliveries" :key="delivery.id" class="flex items-center justify-between gap-2 text-xs">
                     <span>{{ delivery.recipient_email }}<span v-if="delivery.item_count && delivery.item_count > 1"> ({{ delivery.item_count }} დოკუმენტი)</span></span>
                     <div class="flex items-center gap-2">
-                        <StatusBadge :label="delivery.effective_status" :tone="statusTone(delivery.effective_status)" />
+                        <StatusBadge :label="emailDeliveryStatusLabel(delivery.effective_status)" :tone="statusTone(delivery.effective_status)" />
                         <Button v-if="delivery.effective_status === 'failed'" type="button" variant="outline" size="sm" @click="retry(batch.id, delivery.id)">
                             ხელახლა
                         </Button>

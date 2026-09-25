@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { assetTrackingTypeLabel } from '@/lib/labels';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -182,7 +183,7 @@ function submitComplete(record: MaintenanceRecord) {
                 <h1 class="text-2xl font-semibold">{{ asset.name }}</h1>
                 <StatusBadge :label="conditionLabel[asset.condition] ?? asset.condition" :tone="asset.condition === 'good' || asset.condition === 'new' ? 'success' : 'warning'" />
             </div>
-            <p class="text-muted-foreground text-sm">{{ asset.category }} · {{ asset.inventory_code }} · {{ asset.tracking_type }}</p>
+            <p class="text-muted-foreground text-sm">{{ asset.category }} · {{ asset.inventory_code }} · {{ assetTrackingTypeLabel(asset.tracking_type) }}</p>
         </div>
 
         <!-- Current custody -->

@@ -183,8 +183,8 @@ function employeeName(employeeId: string): string {
                     v-model="issueForm.input_format"
                     class="border-input bg-background h-9 rounded-md border px-3 text-sm"
                 >
-                    <option value="hex">Hex</option>
-                    <option value="decimal">Decimal</option>
+                    <option value="hex">თექვსმეტობითი (Hex)</option>
+                    <option value="decimal">ათობითი (Decimal)</option>
                 </select>
             </div>
             <div class="grid gap-2">

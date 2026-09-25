@@ -49,9 +49,14 @@ const deltaClass = computed(() => {
             )
         "
     >
-        <div class="flex items-center justify-between gap-2">
+        <!-- Audit A25: the label used to carry `truncate`, which forced it onto
+             one line and clipped the long Georgian compound labels this product
+             uses mid-word on a phone. Two lines is better than an ellipsis when
+             the label IS the meaning; `items-start` keeps the icon aligned with
+             the first line rather than floating to the middle. -->
+        <div class="flex items-start justify-between gap-2">
             <span
-                class="text-muted-foreground min-w-0 flex-1 truncate text-sm"
+                class="text-muted-foreground min-w-0 flex-1 text-sm leading-snug"
                 >{{ label }}</span
             >
             <component

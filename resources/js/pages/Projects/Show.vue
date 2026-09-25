@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { PROJECT_ROLE_OPTIONS, projectRoleLabel } from '@/lib/labels';
+import { wbsLevelTypeLabel } from '@/lib/labels';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -345,7 +347,7 @@ function formatBytes(bytes: number): string {
                 <div v-for="member in members" :key="member.id" class="flex items-center justify-between rounded-lg border p-3">
                     <span>{{ member.user_name || member.user_email || member.user_id }}</span>
                     <div class="flex items-center gap-2">
-                        <span class="text-muted-foreground">{{ member.role_context || 'წევრი' }}</span>
+                        <span class="text-muted-foreground">{{ projectRoleLabel(member.role_context || 'member') }}</span>
                         <Button v-if="project.can.manage_memberships" size="sm" variant="ghost" class="text-destructive" @click="removeMember(member.id)">ამოღება</Button>
                     </div>
                 </div>
@@ -356,7 +358,15 @@ function formatBytes(bytes: number): string {
                     <option value="" disabled>აირჩიეთ მომხმარებელი</option>
                     <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.name }} ({{ user.email }})</option>
                 </select>
-                <Input v-model="memberForm.role_context" placeholder="როლი პროექტში" class="w-40" />
+                <select v-model="memberForm.role_context" class="border-input bg-background h-9 w-44 rounded-md border px-3 text-sm">
+                        <!-- Audit A20: this was a free-text box, so the column
+                             already mixes English values the system writes
+                             ('member', 'manager') with whatever Georgian a
+                             person typed. A defined list is what makes the
+                             role mean the same thing twice. -->
+                        <option value="">წევრი (ნაგულისხმევი)</option>
+                        <option v-for="role in PROJECT_ROLE_OPTIONS" :key="role.value" :value="role.value">{{ role.label }}</option>
+                    </select>
                 <Button size="sm" type="submit" :disabled="memberForm.processing">წევრის დამატება</Button>
             </form>
             <p v-else-if="project.can.manage_memberships" class="text-muted-foreground mt-4 text-sm">დასამატებელი მომხმარებელი არ არის.</p>
@@ -367,7 +377,7 @@ function formatBytes(bytes: number): string {
             <h2 class="font-semibold">სამუშაოთა სტრუქტურა (WBS)</h2>
             <div class="mt-3 space-y-2 text-sm">
                 <div v-for="location in locations" :key="location.id" class="flex items-center justify-between rounded-lg border p-2">
-                    <span><span class="text-muted-foreground">{{ location.level_type }}</span> · {{ location.name }}</span>
+                    <span><span class="text-muted-foreground">{{ wbsLevelTypeLabel(location.level_type) }}</span> · {{ location.name }}</span>
                     <Button v-if="project.can.manage_wbs" size="sm" variant="ghost" class="text-destructive" @click="removeLocation(location.id)">წაშლა</Button>
                 </div>
                 <EmptyState v-if="!locations.length" title="სტრუქტურის ელემენტი ჯერ არ არის" description="საჭიროების შემთხვევაში დაამატეთ ზონები, სართულები ან სივრცეები." />

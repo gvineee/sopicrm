@@ -147,11 +147,11 @@ function submit() {
 
             <div class="grid gap-2">
                 <div class="flex items-center justify-between">
-                    <Label>Checklist</Label>
+                    <Label>შესამოწმებელი პუნქტები</Label>
                     <Button type="button" variant="outline" size="sm" @click="addChecklistItem">დამატება</Button>
                 </div>
                 <div v-for="(item, index) in form.checklist_items" :key="index" class="flex items-center gap-2">
-                    <Input v-model="item.label" placeholder="checklist პუნქტი" class="flex-1" />
+                    <Input v-model="item.label" placeholder="პუნქტის დასახელება" class="flex-1" />
                     <label class="flex items-center gap-1 text-sm whitespace-nowrap"><input v-model="item.is_required" type="checkbox" /> სავალდებულო</label>
                     <Button type="button" variant="ghost" size="sm" @click="removeChecklistItem(index)">წაშლა</Button>
                 </div>

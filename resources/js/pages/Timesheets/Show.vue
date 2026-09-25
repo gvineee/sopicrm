@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { emailDeliveryStatusLabel, rateTypeLabel, timesheetStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
 
@@ -101,7 +102,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' | 'destru
             <Link href="/timesheets" class="text-muted-foreground text-sm hover:underline">← ტაბელები</Link>
             <div class="mt-2 flex items-center gap-3">
                 <h1 class="text-2xl font-semibold">{{ timesheet.employee_name }}</h1>
-                <StatusBadge :label="timesheet.status" :tone="statusTone(timesheet.status)" />
+                <StatusBadge :label="timesheetStatusLabel(timesheet.status)" :tone="statusTone(timesheet.status)" />
             </div>
             <p class="text-muted-foreground text-sm">{{ timesheet.pay_period?.starts_on }} – {{ timesheet.pay_period?.ends_on }}</p>
             <p v-if="timesheet.rejected_reason" class="text-destructive mt-1 text-sm">უარყოფის მიზეზი: {{ timesheet.rejected_reason }}</p>
@@ -130,7 +131,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' | 'destru
                         <td class="p-3">{{ line.work_date }}</td>
                         <td class="p-3">{{ line.project_name }}</td>
                         <td class="p-3">{{ line.payable_minutes }}</td>
-                        <td class="p-3">{{ line.rate_type }}</td>
+                        <td class="p-3">{{ rateTypeLabel(line.rate_type) }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -181,7 +182,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' | 'destru
                     <div>
                         <div class="flex items-center gap-2">
                             <span>{{ delivery.recipient_email }}</span>
-                            <StatusBadge :label="delivery.status" :tone="emailStatusTone(delivery.status)" />
+                            <StatusBadge :label="emailDeliveryStatusLabel(delivery.status)" :tone="emailStatusTone(delivery.status)" />
                             <span class="text-muted-foreground text-xs">v{{ delivery.timesheet_version_at_send }}</span>
                         </div>
                         <p v-if="delivery.status === 'failed' && delivery.failed_reason" class="text-destructive text-xs">{{ delivery.failed_reason }}</p>

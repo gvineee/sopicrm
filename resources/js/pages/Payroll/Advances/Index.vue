@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
+import { advanceStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import EmptyState from '@/components/states/EmptyState.vue';
@@ -106,7 +107,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
                     </div>
                     <p class="text-sm">{{ advance.amount }} {{ advance.currency }}</p>
                     <p class="text-muted-foreground text-sm">დარჩენილი: {{ advance.remaining }}</p>
-                    <StatusBadge :label="advance.status" :tone="statusTone(advance.status)" />
+                    <StatusBadge :label="advanceStatusLabel(advance.status)" :tone="statusTone(advance.status)" />
                 </div>
             </div>
         </div>

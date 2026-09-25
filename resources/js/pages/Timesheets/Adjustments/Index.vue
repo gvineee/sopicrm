@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
+import { adjustmentStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -102,7 +103,7 @@ function statusTone(status: string): 'success' | 'warning' | 'destructive' {
                     <p class="truncate font-medium">{{ adjustment.employee_name }}</p>
                     <p class="text-muted-foreground text-sm">{{ adjustment.work_date }}</p>
                     <p class="text-muted-foreground truncate text-sm">{{ adjustment.reason }}</p>
-                    <StatusBadge :label="adjustment.for_locked_period ? 'ჩაკეტილი პერიოდი' : adjustment.status" :tone="statusTone(adjustment.status)" />
+                    <StatusBadge :label="adjustment.for_locked_period ? 'ჩაკეტილი პერიოდი' : adjustmentStatusLabel(adjustment.status)" :tone="statusTone(adjustment.status)" />
                     <div v-if="adjustment.status === 'pending'" class="flex gap-2">
                         <button type="button" class="text-sm hover:underline" @click="decide(adjustment, 'approved')">დამტკიცება</button>
                         <button type="button" class="text-destructive text-sm hover:underline" @click="decide(adjustment, 'rejected')">უარყოფა</button>

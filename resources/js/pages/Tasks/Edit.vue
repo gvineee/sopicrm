@@ -210,7 +210,7 @@ function submit() {
 
             <div class="grid gap-2">
                 <div class="flex items-center justify-between">
-                    <Label>Checklist</Label>
+                    <Label>შესამოწმებელი პუნქტები</Label>
                     <Button type="button" variant="outline" size="sm" @click="addChecklistItem">დამატება</Button>
                 </div>
                 <p v-if="removedCheckedLabels.length" class="border-warning bg-warning/10 rounded-lg border p-3 text-xs">

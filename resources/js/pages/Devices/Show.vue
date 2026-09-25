@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { deviceCommandTypeLabel, deviceSyncStatusLabel, formatDateTime } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -191,15 +192,15 @@ function generateEvent() {
                     </div>
                     <div>
                         <dt class="text-muted-foreground">ბოლო heartbeat</dt>
-                        <dd>{{ device.last_heartbeat_at || 'არასდროს' }}</dd>
+                        <dd>{{ formatDateTime(device.last_heartbeat_at, 'არასდროს') }}</dd>
                     </div>
                     <div>
                         <dt class="text-muted-foreground">ბოლო მოვლენა</dt>
-                        <dd>{{ device.last_event_at || 'არასდროს' }}</dd>
+                        <dd>{{ formatDateTime(device.last_event_at, 'არასდროს') }}</dd>
                     </div>
                     <div>
                         <dt class="text-muted-foreground">სინქრონიზაცია</dt>
-                        <dd>{{ device.sync_status }}</dd>
+                        <dd>{{ deviceSyncStatusLabel(device.sync_status) }}</dd>
                     </div>
                     <div>
                         <dt class="text-muted-foreground">Connector ვერსია</dt>
@@ -274,7 +275,7 @@ function generateEvent() {
                             v-model="eventForm.native_event_id"
                             type="number"
                             min="1"
-                            placeholder="Native event ID"
+                            placeholder="მოვლენის ნომერი მოწყობილობაზე"
                             required
                         />
                         <Input
@@ -293,9 +294,9 @@ function generateEvent() {
                         v-model="eventForm.direction"
                         class="border-input bg-background h-9 rounded-md border px-3 text-sm"
                     >
-                        <option value="in">IN</option>
-                        <option value="out">OUT</option>
-                        <option value="unspecified">UNSPECIFIED</option>
+                        <option value="in">შესვლა (IN)</option>
+                        <option value="out">გასვლა (OUT)</option>
+                        <option value="unspecified">მიუთითებელი</option>
                     </select>
                     <Button type="submit" size="sm" :disabled="eventForm.processing"
                         >მოვლენის დაფიქსირება</Button
@@ -313,7 +314,7 @@ function generateEvent() {
             <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-3">
                 <div>
                     <dt class="text-muted-foreground">ბოლო დადასტურებული checkpoint</dt>
-                    <dd>{{ importHealth.checkpoint?.last_confirmed_at || 'არასდროს' }}</dd>
+                    <dd>{{ formatDateTime(importHealth.checkpoint?.last_confirmed_at, 'არასდროს') }}</dd>
                 </div>
                 <div>
                     <dt class="text-muted-foreground">ბოლო native event id / stream epoch</dt>
@@ -325,7 +326,7 @@ function generateEvent() {
                 <div>
                     <dt class="text-muted-foreground">ღია ანომალიები</dt>
                     <dd>
-                        data gap: {{ importHealth.open_anomalies.data_gap }} · თანმიმდევრობა:
+                        მონაცემის გამოტოვება: {{ importHealth.open_anomalies.data_gap }} · თანმიმდევრობა:
                         {{ importHealth.open_anomalies.out_of_order_events }} · საათის აცდენა:
                         {{ importHealth.open_anomalies.clock_drift }}
                     </dd>
@@ -372,7 +373,7 @@ function generateEvent() {
                     </thead>
                     <tbody class="divide-border divide-y">
                         <tr v-for="command in syncCommands" :key="command.id">
-                            <td class="py-2">{{ command.command_type }}</td>
+                            <td class="py-2">{{ deviceCommandTypeLabel(command.command_type) }}</td>
                             <td class="py-2">{{ command.command_version }}</td>
                             <td class="py-2">
                                 <StatusBadge
@@ -381,7 +382,7 @@ function generateEvent() {
                                 />
                             </td>
                             <td class="py-2">{{ command.attempts }}</td>
-                            <td class="py-2">{{ command.acknowledged_at || '—' }}</td>
+                            <td class="py-2">{{ formatDateTime(command.acknowledged_at) }}</td>
                             <td class="text-muted-foreground py-2 text-xs">{{ command.last_error || '—' }}</td>
                         </tr>
                     </tbody>

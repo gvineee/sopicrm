@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { payRunStatusLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
 
@@ -51,7 +52,7 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
             <Link href="/payroll/pay-runs" class="text-muted-foreground text-sm hover:underline">← ანგარიშსწორებები</Link>
             <div class="mt-2 flex items-center gap-3">
                 <h1 class="text-2xl font-semibold">{{ payRun.pay_period?.starts_on }} – {{ payRun.pay_period?.ends_on }}</h1>
-                <StatusBadge :label="payRun.status" :tone="statusTone(payRun.status)" />
+                <StatusBadge :label="payRunStatusLabel(payRun.status)" :tone="statusTone(payRun.status)" />
             </div>
             <p class="text-muted-foreground text-sm">სულ: {{ payRun.total_net_amount ?? '0.00' }} GEL</p>
         </div>

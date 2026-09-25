@@ -7,6 +7,7 @@
  * lightweight component has no wayfinder-generated helper for.
  */
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/labels';
 import { Bell } from '@lucide/vue';
 import { onMounted, onUnmounted, ref } from 'vue';
 import {
@@ -14,6 +15,21 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/**
+ * The Georgian names for these already existed server-side
+ * (App\Domain\Notifications\Support\NotificationType::labels()) but were used
+ * only by the preferences page, never by this dropdown.
+ */
+const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
+    task_assigned: 'დავალების მინიჭება',
+    task_returned: 'დავალების დაბრუნება',
+    mention: 'ხსენება კომენტარში',
+    overdue: 'დავალების ვადაგადაცილება',
+    tool_return_due: 'ხელსაწყოს დაბრუნების ვადა',
+    timesheet_exception: 'ტაბელის გამონაკლისი',
+    device_fault: 'მოწყობილობის ხარვეზი',
+};
 
 type NotificationItem = {
     id: string;
@@ -102,6 +118,16 @@ onUnmounted(() => clearInterval(pollHandle));
                 >
                     <span class="block font-medium">{{ item.title }}</span>
                     <span class="text-muted-foreground block text-xs">{{ item.message }}</span>
+                    <!-- Audit A21: eight notifications showed the same text for
+                         two devices with nothing to tell the occurrences apart.
+                         `created_at` and `type` were already fetched by the
+                         controller and simply never rendered, so a reader could
+                         not tell how many separate incidents they were looking
+                         at. -->
+                    <span class="text-muted-foreground mt-0.5 block text-[11px]">
+                        {{ formatDateTime(item.created_at) }}
+                        <template v-if="NOTIFICATION_TYPE_LABEL[item.type]"> · {{ NOTIFICATION_TYPE_LABEL[item.type] }}</template>
+                    </span>
                 </a>
             </div>
         </DropdownMenuContent>

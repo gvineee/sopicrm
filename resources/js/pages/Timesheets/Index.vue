@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { timesheetStatusLabel } from '@/lib/labels';
 import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -187,7 +188,7 @@ function submitBatch() {
                         <Link :href="`/timesheets/${timesheet.id}`" class="text-muted-foreground text-sm">
                             {{ timesheet.lines_sum_payable_minutes ?? 0 }} წთ
                         </Link>
-                        <StatusBadge :label="timesheet.status" :tone="statusTone(timesheet.status)" />
+                        <StatusBadge :label="timesheetStatusLabel(timesheet.status)" :tone="statusTone(timesheet.status)" />
                     </div>
                 </div>
             </template>

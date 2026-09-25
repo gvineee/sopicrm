@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { formatDateTime } from '@/lib/labels';
 import { reactive } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,7 +124,7 @@ function submitIgnore(mappingId: string) {
                                 {{ mapping.source_system }} · {{ mapping.sample_device_serial || 'უცნობი მოწყობილობა' }} ·
                                 {{ mapping.event_count }} დაფიქსირება
                                 <template v-if="mapping.first_event_at">
-                                    · {{ mapping.first_event_at }}–{{ mapping.last_event_at }}
+                                    · {{ formatDateTime(mapping.first_event_at) }}–{{ formatDateTime(mapping.last_event_at) }}
                                 </template>
                             </p>
                         </div>
@@ -132,7 +133,7 @@ function submitIgnore(mappingId: string) {
 
                     <p v-if="mapping.confirmed_by" class="text-muted-foreground mt-1 text-xs">
                         {{ mapping.status === 'ignored' ? 'იგნორირებულია' : 'დაადასტურა' }}: {{ mapping.confirmed_by }} ·
-                        {{ mapping.confirmed_at }}
+                        {{ formatDateTime(mapping.confirmed_at) }}
                         <template v-if="mapping.note"> — {{ mapping.note }}</template>
                     </p>
 

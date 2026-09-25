@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { userRoleLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/states/EmptyState.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -37,7 +38,7 @@ defineOptions({ layout: { mobileTitle: 'მომხმარებლები'
                         <p class="truncate font-medium">{{ user.name }}</p>
                         <p class="text-muted-foreground truncate text-sm">{{ user.email }}</p>
                         <div class="mt-1 flex flex-wrap gap-1">
-                            <StatusBadge v-for="role in user.roles" :key="role" :label="role" tone="info" />
+                            <StatusBadge v-for="role in user.roles" :key="role" :label="userRoleLabel(role)" tone="info" />
                             <StatusBadge v-if="user.roles.length === 0" label="როლის გარეშე" tone="neutral" />
                             <StatusBadge v-if="!user.is_active" label="გათიშული" tone="warning" />
                         </div>

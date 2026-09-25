@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
+import { userRoleLabel } from '@/lib/labels';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -101,7 +102,7 @@ function submitDeny() {
             <h2 class="font-medium">როლები</h2>
             <div class="flex flex-wrap gap-2">
                 <div v-for="role in assignedRoles" :key="role" class="flex items-center gap-1">
-                    <StatusBadge :label="role" tone="info" />
+                    <StatusBadge :label="userRoleLabel(role)" tone="info" />
                     <Button
                         v-if="canManageRoles"
                         variant="ghost"
@@ -118,7 +119,7 @@ function submitDeny() {
             <form v-if="canManageRoles && availableRolesToAssign.length > 0" class="flex flex-wrap items-center gap-2" @submit.prevent="submitAssignRole">
                 <select v-model="assignRoleForm.role" required class="border-input bg-background h-9 rounded-md border px-3 text-sm">
                     <option value="" disabled>როლის მინიჭება...</option>
-                    <option v-for="role in availableRolesToAssign" :key="role" :value="role">{{ role }}</option>
+                    <option v-for="role in availableRolesToAssign" :key="role" :value="role">{{ userRoleLabel(role) }}</option>
                 </select>
                 <Button type="submit" size="sm" :disabled="assignRoleForm.processing">მინიჭება</Button>
             </form>
@@ -170,7 +171,7 @@ function submitDeny() {
                     <div class="min-w-0">
                         <p class="truncate font-mono text-xs">{{ row.permission }}</p>
                         <p class="text-muted-foreground text-xs">
-                            {{ row.group }}<template v-if="row.via_role"> · {{ row.via_role }}</template>
+                            {{ row.group }}<template v-if="row.via_role"> · {{ userRoleLabel(row.via_role) }}</template>
                         </p>
                     </div>
                     <div class="flex items-center gap-2">

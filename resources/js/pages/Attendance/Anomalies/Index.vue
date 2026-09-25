@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { attendanceAnomalyLabel, formatDateTime } from '@/lib/labels';
 import StatusBadge from '@/components/StatusBadge.vue';
 import EmptyState from '@/components/states/EmptyState.vue';
 
@@ -48,9 +49,9 @@ function resolve(anomaly: Anomaly) {
             <EmptyState v-if="anomalies.data.length === 0" title="აქტიური ანომალია არ არის" description="ყველა დასწრების მონაცემი წესრიგშია." />
             <div v-else class="divide-border divide-y">
                 <div v-for="anomaly in anomalies.data" :key="anomaly.id" class="grid gap-3 p-4 md:grid-cols-[1fr_1fr_160px_auto] md:items-center">
-                    <p class="font-medium">{{ anomaly.anomaly_type }}</p>
+                    <p class="font-medium">{{ attendanceAnomalyLabel(anomaly.anomaly_type) }}</p>
                     <p class="text-muted-foreground truncate text-sm">{{ anomaly.employee_name || 'მოწყობილობის დონე' }}</p>
-                    <p class="text-muted-foreground text-sm">{{ anomaly.detected_at }}</p>
+                    <p class="text-muted-foreground text-sm">{{ formatDateTime(anomaly.detected_at) }}</p>
                     <div class="flex items-center gap-3">
                         <StatusBadge :label="anomaly.resolved_at ? 'მოგვარებული' : 'აქტიური'" :tone="anomaly.resolved_at ? 'success' : 'warning'" />
                         <button v-if="!anomaly.resolved_at" type="button" class="text-sm hover:underline" @click="resolve(anomaly)">მოგვარება</button>

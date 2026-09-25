@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { attachmentClassificationLabel, attachmentStatusLabel, submissionStatusLabel } from '@/lib/labels';
 import { computed, reactive } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -279,7 +280,7 @@ function addComment() {
         </div>
 
         <section v-if="task.checklist_items.length" class="border-border bg-card rounded-xl border p-5">
-            <h2 class="font-semibold">Checklist</h2>
+            <h2 class="font-semibold">შესამოწმებელი პუნქტები</h2>
             <div class="mt-3 space-y-2">
                 <label v-for="item in task.checklist_items" :key="item.id" class="flex items-center gap-2 text-sm">
                     <input
@@ -360,7 +361,7 @@ function addComment() {
                     />
                     <div class="min-w-0 flex-1">
                         <p class="truncate font-medium">{{ file.caption || file.original_filename }}</p>
-                        <p class="text-muted-foreground text-xs">{{ file.classification || 'other' }} · {{ file.status }}</p>
+                        <p class="text-muted-foreground text-xs">{{ attachmentClassificationLabel(file.classification) }} · {{ attachmentStatusLabel(file.status) }}</p>
                     </div>
                 </a>
             </div>
@@ -368,8 +369,8 @@ function addComment() {
             <form v-if="task.can.upload_attachment" class="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto]" @submit.prevent="uploadAttachment">
                 <Input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" required @change="selectFile" />
                 <select v-model="uploadForm.classification" class="border-input bg-background h-9 rounded-md border px-3 text-sm">
-                    <option value="before">Before</option>
-                    <option value="after">After</option>
+                    <option value="before">სამუშაომდე</option>
+                    <option value="after">სამუშაოს შემდეგ</option>
                     <option value="other">სხვა</option>
                 </select>
                 <Button type="submit" :disabled="uploadForm.processing || !uploadForm.file">ატვირთვა</Button>
@@ -383,7 +384,7 @@ function addComment() {
                 <div v-for="submission in task.submissions" :key="submission.id" class="border-border rounded-lg border p-3 text-sm">
                     <div class="flex items-center justify-between">
                         <span>{{ submission.submitted_by }} · {{ submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('ka-GE') : '' }}</span>
-                        <StatusBadge :label="submission.status" :tone="submission.status === 'accepted' ? 'success' : submission.status === 'returned' ? 'destructive' : 'warning'" />
+                        <StatusBadge :label="submissionStatusLabel(submission.status)" :tone="submission.status === 'accepted' ? 'success' : submission.status === 'returned' ? 'destructive' : 'warning'" />
                     </div>
                     <p v-if="submission.comment" class="text-muted-foreground mt-1">{{ submission.comment }}</p>
                     <p v-if="submission.returned_reason" class="text-destructive mt-1">დაბრუნების მიზეზი: {{ submission.returned_reason }}</p>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { attendanceSessionStatusLabel, formatDate } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -101,11 +102,11 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
                     :href="`/attendance/sessions/${session.id}`"
                     class="hover:bg-muted/50 grid gap-3 p-4 md:grid-cols-[140px_1fr_1fr_120px_100px_auto] md:items-center"
                 >
-                    <p class="text-sm">{{ session.work_date }}</p>
+                    <p class="text-sm">{{ formatDate(session.work_date) }}</p>
                     <p class="truncate font-medium">{{ session.employee_name }}</p>
                     <p class="text-muted-foreground truncate text-sm">{{ session.project_name || session.site_name || '—' }}</p>
                     <p class="text-muted-foreground text-sm">{{ session.payable_minutes ?? '—' }} წთ</p>
-                    <StatusBadge :label="session.status" :tone="statusTone(session.status)" />
+                    <StatusBadge :label="attendanceSessionStatusLabel(session.status)" :tone="statusTone(session.status)" />
                     <p v-if="session.anomalies_count" class="text-destructive text-sm">{{ session.anomalies_count }} ანომალია</p>
                 </Link>
             </div>
