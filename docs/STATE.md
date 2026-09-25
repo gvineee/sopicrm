@@ -123,12 +123,13 @@ In rough order of value:
    - **WF-02** is already satisfied by the cycle checker. **WF-03…06**
      (drawing revisions, cancelling partial work, return history, reviewer
      deadlines), **OFF-01…04**, **UI-01…04**, **INT-01/02** remain.
-2. **BioStar session pairing.** The read path is now live and proven against
-   the real server (see §6), but the two doors both have `exit_device: NONE`,
-   so BioStar itself does not know which reader is an entry and which an exit.
-   Until somebody configures that, `reader_role` is `unspecified` on both
-   devices and attendance cannot pair a swipe into a worked interval. Make the
-   unknown-exit case say so rather than guessing a direction.
+2. **BioStar session pairing** — see `docs/BIOSTAR-HANDOFF.md`, which is the
+   current state of that whole thread. The read path is live and proven against
+   the real server (§5 below), and the missing-direction case now says so
+   through the `undirected_reader` anomaly. What remains is **not code**: the
+   owner has to decide how entry and exit are determined on this install, and
+   one badge swipe is needed to confirm the device clock correction. Do not
+   pick a direction policy on their behalf.
 3. **Spec-02's remaining stages.** That document is the full product spec and
    most of it is still ahead.
 
