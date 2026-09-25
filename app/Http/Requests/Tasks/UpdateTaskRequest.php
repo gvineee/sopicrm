@@ -8,6 +8,16 @@ use Illuminate\Validation\Rule;
 /**
  * spec section 10 task edit — status is deliberately never accepted here;
  * see the dedicated transition endpoints (assign/start/block/unblock/...).
+ *
+ * Audit A08: the create form offered additional performers, dependencies and
+ * a checklist; this one accepted none of them, so anything set at creation
+ * could never afterwards be corrected. The same three collections are now
+ * accepted, validated exactly as StoreTaskRequest validates them.
+ *
+ * Each collection is `sometimes`, not `nullable`: a client that omits the key
+ * leaves that collection untouched, while sending an empty array clears it.
+ * That distinction matters because the edit form and a future partial update
+ * must not be able to silently wipe a task's crew by saying nothing about it.
  */
 class UpdateTaskRequest extends FormRequest
 {
@@ -37,9 +47,39 @@ class UpdateTaskRequest extends FormRequest
             'planned_duration_minutes' => ['nullable', 'integer', 'min:1'],
             'unit' => ['nullable', 'string', 'max:50'],
             'planned_quantity' => ['nullable', 'numeric', 'min:0'],
-            'self_close_allowed' => ['nullable', 'boolean'],
+            // TM-01: the self-close carve-out is cancelled. The column
+            // survives as history (§17) but nothing in the workflow reads it,
+            // so no request may set it either — accepting a value here would
+            // record a decision that has no effect.
             'requires_photo_evidence' => ['nullable', 'boolean'],
             'min_required_photos' => ['nullable', 'integer', 'min:0'],
+
+            'checklist_items' => ['sometimes', 'array'],
+            // An existing row is identified by its own id so that editing a
+            // label does not destroy and recreate the item, which would throw
+            // away who ticked it and when. A row with no id is a new one.
+            'checklist_items.*.id' => [
+                'nullable', 'uuid',
+                Rule::exists('checklist_items', 'id')->where('organization_id', $organizationId),
+            ],
+            'checklist_items.*.label' => ['required_with:checklist_items', 'string', 'max:255'],
+            'checklist_items.*.is_required' => ['nullable', 'boolean'],
+
+            'assignee_employee_ids' => ['sometimes', 'array'],
+            'assignee_employee_ids.*' => [
+                'uuid',
+                Rule::exists('employees', 'id')->where('organization_id', $organizationId),
+            ],
+            'assignee_team_ids' => ['sometimes', 'array'],
+            'assignee_team_ids.*' => [
+                'uuid',
+                Rule::exists('teams', 'id')->where('organization_id', $organizationId),
+            ],
+            'depends_on_task_ids' => ['sometimes', 'array'],
+            'depends_on_task_ids.*' => [
+                'uuid',
+                Rule::exists('tasks', 'id')->where('organization_id', $organizationId),
+            ],
         ];
     }
 }

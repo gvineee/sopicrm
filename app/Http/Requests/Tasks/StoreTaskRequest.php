@@ -38,7 +38,10 @@ class StoreTaskRequest extends FormRequest
             'planned_duration_minutes' => ['nullable', 'integer', 'min:1'],
             'unit' => ['nullable', 'string', 'max:50'],
             'planned_quantity' => ['nullable', 'numeric', 'min:0'],
-            'self_close_allowed' => ['nullable', 'boolean'],
+            // TM-01: the self-close carve-out is cancelled. The column
+            // survives as history (§17) but nothing in the workflow reads it,
+            // so no request may set it either — accepting a value here would
+            // record a decision that has no effect.
             'requires_photo_evidence' => ['nullable', 'boolean'],
             'min_required_photos' => ['nullable', 'integer', 'min:0'],
             'checklist_items' => ['nullable', 'array'],

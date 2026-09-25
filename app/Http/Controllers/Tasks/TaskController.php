@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tasks;
 
 use App\Domain\Employees\Models\Employee;
+use App\Domain\Employees\Models\Team;
 use App\Domain\Projects\Models\Project;
 use App\Domain\Shared\Models\Attachment;
 use App\Domain\Tasks\Actions\AcceptTaskSubmission;
@@ -106,6 +107,10 @@ class TaskController extends Controller
             'employees' => EmployeeResource::collection(
                 Employee::query()->where('status', 'active')->orderBy('last_name')->get()
             ),
+            // Audit A08: brigades were accepted by StoreTaskRequest and
+            // handled by CreateTask, but no form ever offered them, so
+            // assigning work to a whole crew was unreachable from the UI.
+            'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'existingTasks' => Task::query()->where('project_id', $project->id)->orderBy('title')->get(['id', 'title']),
         ]);
     }
@@ -183,7 +188,17 @@ class TaskController extends Controller
     {
         $this->authorize('update', $task);
 
-        $task->load(['accountableOwner']);
+        // Audit A08: without these relations TaskDetailResource omits the
+        // assignee/checklist/dependency blocks entirely (they are all
+        // `whenLoaded`), so the editor would render those sections empty and
+        // saving would then delete the very rows it never showed.
+        $task->load([
+            'accountableOwner',
+            'assignees.employee',
+            'assignees.team',
+            'checklistItems',
+            'dependencies.dependsOn',
+        ]);
 
         return Inertia::render('Tasks/Edit', [
             'project' => ['id' => $project->id, 'name' => $project->name],
@@ -191,6 +206,14 @@ class TaskController extends Controller
             'employees' => EmployeeResource::collection(
                 Employee::query()->where('status', 'active')->orderBy('last_name')->get()
             ),
+            'teams' => Team::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // The task itself is excluded: a dependency on yourself is not a
+            // choice worth offering.
+            'existingTasks' => Task::query()
+                ->where('project_id', $project->id)
+                ->whereKeyNot($task->id)
+                ->orderBy('title')
+                ->get(['id', 'title']),
         ]);
     }
 

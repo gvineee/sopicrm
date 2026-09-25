@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 const props = defineProps<{
     project: { id: string; name: string };
     employees: Array<{ id: string; full_name: string }>;
+    teams: Array<{ id: string; name: string }>;
     existingTasks: Array<{ id: string; title: string }>;
 }>();
 
@@ -21,11 +22,11 @@ const form = useForm({
     planned_duration_minutes: '',
     unit: '',
     planned_quantity: '',
-    self_close_allowed: false,
     requires_photo_evidence: true,
     min_required_photos: 1,
     checklist_items: [] as Array<{ label: string; is_required: boolean }>,
     assignee_employee_ids: [] as string[],
+    assignee_team_ids: [] as string[],
     depends_on_task_ids: [] as string[],
 });
 
@@ -104,8 +105,14 @@ function submit() {
             </div>
 
             <div class="flex flex-wrap gap-4 text-sm">
+                <!-- "თვითდახურვა დაშვებულია" was removed here on purpose.
+                     03-Construction-Task-Manager-Spec-KA.md TM-01 cancelled
+                     the self-close carve-out: acceptance now always takes two
+                     different people, and nothing in the workflow reads that
+                     flag any more. The column survives as history (§17), but
+                     offering it as a live setting told the manager they were
+                     choosing something that no longer has any effect. -->
                 <label class="flex items-center gap-2"><input v-model="form.requires_photo_evidence" type="checkbox" /> ფოტო სავალდებულოა</label>
-                <label class="flex items-center gap-2"><input v-model="form.self_close_allowed" type="checkbox" /> თვითდახურვა დაშვებულია (დაბალი რისკი)</label>
             </div>
 
             <div class="grid gap-2">
@@ -113,6 +120,18 @@ function submit() {
                 <div class="flex max-h-32 flex-wrap gap-3 overflow-y-auto">
                     <label v-for="employee in employees" :key="employee.id" class="border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm">
                         <input type="checkbox" :value="employee.id" v-model="form.assignee_employee_ids" /> {{ employee.full_name }}
+                    </label>
+                </div>
+            </div>
+
+            <!-- Audit A08: brigades were already accepted by StoreTaskRequest
+                 and created by CreateTask, but no form ever offered them, so
+                 assigning work to a whole crew was unreachable from the UI. -->
+            <div v-if="teams.length" class="grid gap-2">
+                <Label>ბრიგადები</Label>
+                <div class="flex max-h-32 flex-wrap gap-3 overflow-y-auto">
+                    <label v-for="team in teams" :key="team.id" class="border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm">
+                        <input v-model="form.assignee_team_ids" type="checkbox" :value="team.id" /> {{ team.name }}
                     </label>
                 </div>
             </div>

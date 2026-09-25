@@ -45,7 +45,9 @@ class CreateTask
                 'planned_duration_minutes' => $data['planned_duration_minutes'] ?? null,
                 'unit' => $data['unit'] ?? null,
                 'planned_quantity' => $data['planned_quantity'] ?? null,
-                'self_close_allowed' => $data['self_close_allowed'] ?? false,
+                // TM-01: always false. The column is kept for history (§17);
+                // no new task is ever created with the cancelled carve-out on.
+                'self_close_allowed' => false,
                 'requires_photo_evidence' => $data['requires_photo_evidence'] ?? true,
                 'min_required_photos' => $data['min_required_photos'] ?? 1,
                 'progress_weight' => $data['progress_weight'] ?? null,
