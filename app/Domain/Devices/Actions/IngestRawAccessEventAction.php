@@ -27,6 +27,7 @@ class IngestRawAccessEventAction
      *     stream_epoch: int,
      *     raw_device_time: string,
      *     event_code: string,
+     *     server_time?: string|null,
      *     event_subcode?: string|null,
      *     card_type?: string|null,
      *     card_hex?: string|null,
@@ -68,8 +69,16 @@ class IngestRawAccessEventAction
                 'device_id' => $device->id,
                 'native_event_id' => $nativeEventId,
                 'stream_epoch' => $streamEpoch,
+                // The two columns mean different things and are finally used
+                // that way: `raw_device_time` is what the device CLAIMED, and
+                // `normalized_event_time_utc` is the time everything
+                // downstream computes from. Where the upstream system reports
+                // its own trustworthy UTC (BioStar's `server_datetime`), that
+                // is the normalized one; the device's claim is kept beside it
+                // rather than overwritten, so a drifting clock stays visible
+                // instead of being quietly corrected away.
                 'raw_device_time' => $rawDeviceTime,
-                'normalized_event_time_utc' => $rawDeviceTime,
+                'normalized_event_time_utc' => $eventData['server_time'] ?? $rawDeviceTime,
                 'received_at' => now(),
                 'credential_id' => $credential?->id,
                 'unmatched_credential_ref' => $unmatchedReference,

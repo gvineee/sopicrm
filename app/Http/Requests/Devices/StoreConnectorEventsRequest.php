@@ -20,6 +20,14 @@ class StoreConnectorEventsRequest extends FormRequest
             'events.*.native_event_id' => ['required', 'integer', 'min:0'],
             'events.*.stream_epoch' => ['required', 'integer', 'min:0'],
             'events.*.raw_device_time' => ['required', 'date'],
+            // The upstream system's own UTC for this event, when it has one
+            // the device's clock does not. BioStar reports both: `datetime`
+            // is what the reader believed, `server_datetime` is when the
+            // server recorded it — and on the live install the reader's clock
+            // is three hours out while the server's matches real UTC exactly.
+            // Without this, every worked hour computed from those events would
+            // have been wrong by that much.
+            'events.*.server_time' => ['nullable', 'date'],
             'events.*.event_code' => ['required', 'string', 'max:100'],
             'events.*.event_subcode' => ['nullable', 'string', 'max:100'],
             'events.*.card_type' => ['nullable', 'required_with:events.*.card_hex', 'string', 'max:100'],
@@ -36,6 +44,7 @@ class StoreConnectorEventsRequest extends FormRequest
      *     native_event_id: int,
      *     stream_epoch: int,
      *     raw_device_time: string,
+     *     server_time?: string|null,
      *     event_code: string,
      *     event_subcode?: string|null,
      *     card_type?: string|null,

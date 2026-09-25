@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Agent } from 'undici';
+import { biostarEventCode } from './biostar-event-taxonomy.js';
 
 /**
  * Real-adapter boundary targeting Suprema hardware — pivoted from the
@@ -45,6 +46,28 @@ import { Agent } from 'undici';
  * correct fix for the common "self-signed LAN deployment" case
  * `BIOSTAR_VERIFY_TLS=false` was previously the only escape hatch for.
  */
+/**
+ * How far the reader's own clock is from the server's, in seconds. Reported
+ * so Laravel's clock-drift detection sees the real number instead of
+ * inferring it, and so a device whose clock is wrong is visible as a fact
+ * rather than as strange attendance.
+ */
+function clockOffsetSeconds(row) {
+    if (!row?.datetime || !row?.server_datetime) return null;
+
+    const device = Date.parse(row.datetime);
+    const server = Date.parse(row.server_datetime);
+
+    if (Number.isNaN(device) || Number.isNaN(server)) return null;
+
+    const offset = Math.round((device - server) / 1000);
+
+    // The Laravel side validates this between -86400 and 86400; a value
+    // outside that says the clock is not merely drifting, and clamping it
+    // would hide that.
+    return Math.abs(offset) <= 86400 ? offset : null;
+}
+
 export class SupremaDeviceGatewayAdapter {
     mode = 'suprema';
     label = 'BioStar2 REST (Suprema) — read-only, hardware-verified for reads only';
@@ -53,6 +76,19 @@ export class SupremaDeviceGatewayAdapter {
     #fetch;
     #dispatcher;
     #sessionId = null;
+
+    /**
+     * BioStar user_id -> the card that user carries. Events name the PERSON
+     * but never the card, while the CRM matches a swipe to an employee by
+     * card — so without this every imported event would arrive with no
+     * credential and no employee, and produce no attendance at all.
+     *
+     * Cached because it is a per-person fact that changes when somebody is
+     * issued a card, not per swipe.
+     */
+    #cardsByUserId = new Map();
+
+    #cardsLoadedAt = 0;
 
     constructor(env = process.env, fetchImpl = globalThis.fetch) {
         this.#config = this.#readConfig(env);
@@ -144,6 +180,64 @@ export class SupremaDeviceGatewayAdapter {
             throw new Error(`BioStar2 login failed: HTTP ${response.status}`);
         }
         this.#sessionId = sessionId;
+    }
+
+    /**
+     * BioStar reports a card id in DECIMAL (`card_id: "69410222"`), while the
+     * CRM's ingest endpoint expects hex and converts it back to decimal for
+     * `canonical_identifier`. Sending the decimal string through unchanged
+     * would be read as hex — 69410222 decimal would arrive as 1765868066 —
+     * which silently matches no credential and files a triage row for a card
+     * nobody owns. Verified both directions against the live server.
+     */
+    static decimalCardIdToHex(cardId) {
+        if (cardId === null || cardId === undefined) return null;
+
+        const digits = String(cardId).trim();
+        if (!/^\d+$/.test(digits)) return null;
+
+        return BigInt(digits).toString(16).toUpperCase();
+    }
+
+    /**
+     * Refreshes the user -> card map. The list endpoint reports only a
+     * `card_count`, so the cards themselves come from each holder's detail
+     * record; only users who actually have one are fetched.
+     */
+    async #refreshCardCache(ttlMs = 300000) {
+        if (Date.now() - this.#cardsLoadedAt < ttlMs && this.#cardsByUserId.size > 0) return;
+
+        const list = await this.#request('/api/users?limit=1000');
+        const rows = list?.UserCollection?.rows ?? [];
+        const next = new Map();
+
+        for (const row of rows) {
+            if (Number(row.card_count ?? 0) < 1) continue;
+
+            try {
+                const detail = await this.#request(`/api/users/${row.user_id}`);
+                const card = detail?.User?.cards?.find((c) => c.is_assigned !== 'false' && c.is_blocked !== 'true')
+                    ?? detail?.User?.cards?.[0];
+
+                const hex = SupremaDeviceGatewayAdapter.decimalCardIdToHex(card?.card_id);
+                if (!hex) continue;
+
+                next.set(String(row.user_id), {
+                    card_type: card?.card_type?.name ?? 'CSN',
+                    card_hex: hex,
+                });
+            } catch {
+                // One unreadable user must not cost the whole import. The
+                // event still imports; it simply arrives unmatched and shows
+                // up on the unknown-cards triage page, which is the honest
+                // outcome rather than a guess.
+            }
+        }
+
+        if (next.size > 0 || rows.length === 0) {
+            this.#cardsByUserId = next;
+            this.#cardsLoadedAt = Date.now();
+        }
     }
 
     async #request(path, { method = 'GET', body } = {}) {
@@ -329,58 +423,95 @@ export class SupremaDeviceGatewayAdapter {
     /**
      * Event API equivalent, via BioStar2's event log search.
      *
-     * KNOWN LIMITATION (documented, not silent): the exact server-side
-     * filter syntax for "events after id X for device Y" could not be
-     * confirmed against Suprema's own docs (the knowledge-base page for it
-     * doesn't exist yet); querying with an unconfirmed filter risks
-     * silently dropping real events, which is worse than this interim
-     * approach. Instead this pulls a bounded recent window across all
-     * devices, filters to this deviceId and to native_event_id > checkpoint
-     * client-side. If more than `limit` events land on ANY device between
-     * polls, some could be missed — Laravel's own checkpoint/data-gap
-     * anomaly detection (IngestRawAccessEventAction) will flag that
-     * scenario rather than silently losing it. Revisit once the real
-     * filter/date-range query syntax is confirmed.
+     * Two things here were verified against a live BioStar 2 server rather
+     * than assumed, and the code reflects what was actually confirmed:
+     *
+     *  - A server-side `device_id` condition DOES work. This used to pull a
+     *    bounded window across ALL devices and filter in JS, which on a busy
+     *    install silently lost events: a chatty door's lock/unlock traffic
+     *    could fill the whole window before a quiet reader's badge read was
+     *    reached. The window is now per device, so one device's noise cannot
+     *    crowd out another's.
+     *  - A time-range condition could NOT be confirmed. Several operator
+     *    values return rows without demonstrably narrowing anything, and
+     *    guessing wrong here means silently dropping real events, so the
+     *    incremental cut is still made on `native_event_id` — which BioStar
+     *    guarantees monotonic — rather than on a date filter that might not
+     *    be doing what it appears to.
+     *
+     *  If more than `limit` events land on ONE device between polls, some can
+     *  still be missed; Laravel's checkpoint/data-gap anomaly detection
+     *  (IngestRawAccessEventAction) flags that rather than losing it quietly.
+     *
      * @param {string} deviceId
      * @param {{ lastNativeEventId?: number }} checkpoint
      * @param {number} limit
      */
     async pullEvents(deviceId, checkpoint, limit) {
+        // Events name the person but never the card; the CRM matches a swipe
+        // to an employee BY card. Without this the import would land every
+        // event with no credential and produce no attendance at all.
+        await this.#refreshCardCache().catch(() => {});
+
         const windowSize = Math.max(limit, 200);
         const data = await this.#request('/api/events/search', {
             method: 'POST',
-            body: { Query: { limit: windowSize, conditions: [] } },
+            body: {
+                Query: {
+                    limit: windowSize,
+                    // Verified working against a live server: this really does
+                    // narrow the result to one device.
+                    conditions: [{ column: 'device_id', operator: 0, values: [String(deviceId)] }],
+                    orders: [{ column: 'datetime', descending: true }],
+                },
+            },
         });
         const rows = data?.EventCollection?.rows ?? [];
         const sinceId = checkpoint?.lastNativeEventId ?? 0;
 
         return rows
-            .filter((row) => row?.device_id?.id === deviceId)
-            .map((row) => ({
-                native_event_id: Number(row.id),
-                // BioStar2's own event log is durably unique/monotonic —
-                // it already absorbs any device-side log rollover
-                // internally, so there is no separate "stream epoch" to
-                // track on this integration path (unlike a raw
-                // device-level log pull, which is what stream_epoch was
-                // originally designed for).
-                stream_epoch: 0,
-                raw_device_time: row.datetime,
-                // Suprema's numeric event_type_id.code -> our semantic
-                // event_code taxonomy is NOT mapped here (guessing it wrong
-                // for a security event log is worse than leaving it
-                // explicit) — the raw code and full row are preserved in
-                // `payload` for a later, docs-confirmed mapping pass.
-                event_code: `biostar:${row.event_type_id?.code ?? 'unknown'}`,
-                payload: row,
-                // Laravel's StoreConnectorEventsRequest only accepts
-                // 'device-connector' | 'simulator' | 'biostar-import' —
-                // this is the already-existing enum member for BioStar
-                // provenance, not a new value.
-                ingestion_source: 'biostar-import',
-            }))
+            // Defence in depth: the condition above is server-side, but a row
+            // for another device must never be attributed to this one.
+            .filter((row) => String(row?.device_id?.id) === String(deviceId))
+            .map((row) => {
+                const card = this.#cardsByUserId.get(String(row?.user_id?.user_id ?? ''));
+
+                return {
+                    native_event_id: Number(row.id),
+                // BioStar2's own event log is durably unique/monotonic — it
+                // already absorbs any device-side log rollover internally, so
+                // there is no separate "stream epoch" to track on this path.
+                    stream_epoch: 0,
+                // What the READER believed the time was. On the live install
+                // this runs three hours behind real UTC, which is exactly why
+                // it is no longer what attendance computes from.
+                    raw_device_time: row.datetime,
+                // What the SERVER recorded, which matched real UTC exactly.
+                // Laravel stores this as `normalized_event_time_utc` and
+                // keeps the device's claim beside it, so a drifting clock
+                // stays visible instead of being quietly corrected away.
+                    server_time: row.server_datetime ?? null,
+                    clock_offset_seconds: clockOffsetSeconds(row),
+                // Mapped, not forwarded raw: the attendance rebuild excludes
+                // `access_denied`, and an unmapped `biostar:6401` would have
+                // sailed past that exclusion and counted a refused badge as
+                // an arrival.
+                    event_code: biostarEventCode(row.event_type_id?.code),
+                    payload: row,
+                    // The card the person who swiped carries, converted from
+                    // BioStar's decimal to the hex the CRM's normalizer
+                    // expects. Absent when the holder has no card on file —
+                    // the event still imports and shows up for triage rather
+                    // than being attributed to a guess.
+                    ...(card ? { card_type: card.card_type, card_hex: card.card_hex } : {}),
+                    // Laravel's StoreConnectorEventsRequest accepts
+                    // 'device-connector' | 'simulator' | 'biostar-import'.
+                    ingestion_source: 'biostar-import',
+                };
+            })
             .filter((event) => event.native_event_id > sinceId)
             .sort((a, b) => a.native_event_id - b.native_event_id)
             .slice(0, limit);
     }
+
 }
