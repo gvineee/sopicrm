@@ -34,12 +34,12 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_DB: oda_crm_test
-          POSTGRES_USER: oda_app
-          POSTGRES_PASSWORD: secret
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U oda_app -d oda_crm_test"
+          --health-cmd "pg_isready -U postgres -d oda_crm_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -94,12 +94,19 @@ jobs:
       # connection it runs as is NOT a superuser (failing loudly, not
       # silently passing-but-meaningless, if this step is ever skipped) —
       # per the spec's "tested with a real runtime DB role" requirement.
-      # Stripping the flag here, before migrations run, is safe: owning the
-      # database/tables (which `oda_app` already does) is sufficient to run
-      # DDL against them, superuser status is not required.
-      - name: Strip superuser from the CI Postgres role (RLS must be real)
+      #
+      # The app role is created here as a separate, ordinary role rather than
+      # by stripping SUPERUSER from POSTGRES_USER: that user is the cluster's
+      # bootstrap superuser, and PostgreSQL 16 refuses to remove the attribute
+      # from it — which is the step every recent CI run failed on. Owning the
+      # database is enough to run every migration, including
+      # `create extension btree_gist` (a trusted extension).
+      - name: Create the non-superuser app role (RLS must be real)
         run: |
-          PGPASSWORD=secret psql -h 127.0.0.1 -U oda_app -d oda_crm_test -c "ALTER ROLE oda_app NOSUPERUSER;"
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d oda_crm_test -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE oda_app LOGIN PASSWORD 'secret' NOSUPERUSER;" \
+            -c "ALTER DATABASE oda_crm_test OWNER TO oda_app;" \
+            -c "ALTER SCHEMA public OWNER TO oda_app;"
 
       - name: Lint (Pint)
         run: vendor/bin/pint --test
