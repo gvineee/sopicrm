@@ -50,7 +50,7 @@ type TaskDetail = {
 const props = defineProps<{
     project: { id: string; name: string };
     task: TaskDetail;
-    employees: Array<{ id: string; full_name: string }>;
+    employees: Array<{ id: string; full_name: string; internal_code?: string | null; has_login?: boolean }>;
     teams: Array<{ id: string; name: string }>;
     existingTasks: Array<{ id: string; title: string }>;
 }>();
@@ -150,7 +150,16 @@ function submit() {
                 <div class="grid gap-2">
                     <Label>პასუხისმგებელი</Label>
                     <select v-model="form.accountable_owner_employee_id" required class="border-input bg-background h-9 rounded-md border px-3 text-sm">
-                        <option v-for="employee in employees" :key="employee.id" :value="employee.id">{{ employee.full_name }}</option>
+                        <option v-for="employee in employees" :key="employee.id" :value="employee.id">
+                            {{ employee.full_name }}<template v-if="employee.internal_code"> · {{ employee.internal_code }}</template>
+                            <!-- Audit A09: the responsible person is chosen
+                                 from employees while a project member is
+                                 chosen from accounts. Saying here whether this
+                                 employee has a login is what connects the two
+                                 lists: without one they cannot open the task,
+                                 submit it, or see it in „ჩემი დღე". -->
+                            <template v-if="!employee.has_login"> · ანგარიში არ აქვს</template>
+                        </option>
                     </select>
                     <p v-if="fieldError('accountable_owner_employee_id')" class="text-destructive text-xs">{{ fieldError('accountable_owner_employee_id') }}</p>
                 </div>

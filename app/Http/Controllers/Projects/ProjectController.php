@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Projects;
 
 use App\Domain\Companies\Models\Company;
+use App\Domain\Employees\Models\Employee;
 use App\Domain\Projects\Actions\CreateProjectAction;
 use App\Domain\Projects\Actions\TransitionProjectStatusAction;
 use App\Domain\Projects\Actions\UpdateProjectAction;
@@ -151,8 +152,17 @@ class ProjectController extends Controller
             'members' => ProjectMemberResource::collection(
                 $project->memberships()->active()->with('user')->orderBy('created_at')->get()
             ),
+            // Audit A09: „პროექტის წევრი აირჩევა User-იდან, დავალების
+            // პასუხისმგებელი Employee-დან. ორივე განსხვავებული სიაა."
+            //
+            // They are different lists because they are different things: a
+            // membership grants access to a project, an Employee is the person
+            // employed. The two are now linked (see
+            // App\Domain\Employees\Actions\LinkEmployeeToUserAction), so
+            // each account can say which employee it belongs to instead of
+            // leaving the operator to match names by eye.
             'availableUsers' => $canManageMemberships
-                ? User::query()->where('organization_id', $request->user()->organization_id)->where('is_system_account', false)->orderBy('name')->get(['id', 'name', 'email'])
+                ? $this->selectableUsers($request->user()->organization_id)
                 : [],
             // Flat list, not just top-level — the WBS tree can be arbitrarily
             // deep (spec section 10) and Eloquent's `with('children')` only
@@ -257,5 +267,48 @@ class ProjectController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'პროექტი წაშლილია.']);
 
         return to_route('projects.index');
+    }
+
+    /**
+     * Accounts that may be added to a project, each carrying the employee it
+     * is linked to. An account with no employee record is still offered — an
+     * administrator or an external reviewer legitimately has none — but it is
+     * labelled, so "this login is not a member of staff" is visible rather
+     * than inferred.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function selectableUsers(string $organizationId): array
+    {
+        $users = User::query()
+            ->where('organization_id', $organizationId)
+            ->where('is_system_account', false)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email']);
+
+        $employees = Employee::query()
+            ->whereIn('user_id', $users->pluck('id'))
+            ->with('jobPosition:id,name')
+            ->get(['id', 'user_id', 'first_name', 'last_name', 'internal_code', 'position', 'position_id']);
+
+        $byUserId = $employees->keyBy('user_id');
+
+        return array_values($users->map(function (User $user) use ($byUserId): array {
+            $employee = $byUserId->get($user->id);
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'employee_name' => $employee === null
+                    ? null
+                    : trim("{$employee->first_name} {$employee->last_name}"),
+                'employee_code' => $employee?->internal_code,
+                // `??` isolates the whole left-hand expression, so an
+                // employee with no linked job position falls through to the
+                // free-text one rather than blowing up.
+                'employee_position' => $employee?->jobPosition->name ?? $employee?->position,
+            ];
+        })->all());
     }
 }

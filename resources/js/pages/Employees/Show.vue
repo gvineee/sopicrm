@@ -318,6 +318,16 @@ function uploadPhoto(event: Event) {
                                 employee.has_login ? 'აქტივირებულია' : 'არ არის'
                             }}
                         </dd>
+                        <!-- Audit A22: the job title above is an HR fact, not a
+                             permission. Saying so here is what stops „დირექტორი"
+                             being read as a level of access. A26 showed why it
+                             matters: every account in the database held `owner`
+                             regardless of anyone's title. -->
+                        <dd class="text-muted-foreground mt-1 text-xs">
+                            თანამდებობა სისტემაში წვდომას არ განსაზღვრავს — ის
+                            <template v-if="employee.has_login">ანგარიშის უსაფრთხოების როლებით დგინდება.</template>
+                            <template v-else>ანგარიშის დაკავშირების შემდეგ, უსაფრთხოების როლებით დაინიშნება.</template>
+                        </dd>
                     </div>
                     <div v-if="employee.personal_id_number_visible">
                         <dt class="text-muted-foreground">პირადი ნომერი</dt>

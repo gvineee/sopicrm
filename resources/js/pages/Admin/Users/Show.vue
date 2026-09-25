@@ -172,8 +172,36 @@ function submitDeny() {
             <p class="text-muted-foreground text-sm">{{ targetUser.email }}</p>
         </div>
 
+        <!-- Audit A22: „„დირექტორი" არსებობს როგორც თანამშრომლის პოზიცია;
+             User-ის როლებში ცალკე director არ ჩანს. პოზიცია, მართვითი
+             პასუხისმგებლობა და უსაფრთხოების როლი უნდა გაიმიჯნოს და
+             ადამიანისთვის გასაგებად იყოს დაკავშირებული."
+
+             They are three different things about the same person, and the
+             product was silently treating the words as interchangeable. Naming
+             the distinction is the fix: it is not a missing "director" role,
+             it is that a job title and a system role answer different
+             questions. -->
+        <section class="border-border bg-muted/30 rounded-xl border p-4 text-sm">
+            <h2 class="font-medium">პოზიცია, პასუხისმგებლობა და როლი — სამი სხვადასხვა რამ</h2>
+            <dl class="text-muted-foreground mt-2 grid gap-2">
+                <div>
+                    <dt class="text-foreground font-medium">თანამდებობა (მაგ. „დირექტორი")</dt>
+                    <dd>ადამიანის სამსახურებრივი პოზიცია. ინახება თანამშრომლის ბარათში და არაფერს რთავს სისტემაში.</dd>
+                </div>
+                <div>
+                    <dt class="text-foreground font-medium">მართვითი პასუხისმგებლობა</dt>
+                    <dd>ვინ ვის ხელმძღვანელობს და ვინ აგებს პასუხს კონკრეტულ სამუშაოზე — ეს ბრიგადით, ხელმძღვანელით და დავალების პასუხისმგებლით განისაზღვრება.</dd>
+                </div>
+                <div>
+                    <dt class="text-foreground font-medium">უსაფრთხოების როლი (ქვემოთ)</dt>
+                    <dd>რის გაკეთებას რთავს სისტემა. მხოლოდ ეს სია განსაზღვრავს წვდომას — თანამდებობა მასზე გავლენას არ ახდენს.</dd>
+                </div>
+            </dl>
+        </section>
+
         <section class="border-border bg-card flex flex-col gap-3 rounded-xl border p-4">
-            <h2 class="font-medium">როლები</h2>
+            <h2 class="font-medium">უსაფრთხოების როლები</h2>
             <div class="flex flex-wrap gap-2">
                 <div v-for="role in assignedRoles" :key="role" class="flex items-center gap-1">
                     <StatusBadge :label="userRoleLabel(role)" tone="info" />

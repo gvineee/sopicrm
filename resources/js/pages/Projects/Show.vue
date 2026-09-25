@@ -83,7 +83,14 @@ const props = defineProps<{
     project: ProjectDetail;
     statusOptions: string[];
     members: Member[];
-    availableUsers: Array<{ id: string; name: string; email: string }>;
+    availableUsers: Array<{
+        id: string;
+        name: string;
+        email: string;
+        employee_name?: string | null;
+        employee_code?: string | null;
+        employee_position?: string | null;
+    }>;
     locations: LocationRow[];
     documents: DocumentRow[];
     taskStats: TaskStats;
@@ -356,7 +363,18 @@ function formatBytes(bytes: number): string {
             <form v-if="project.can.manage_memberships && availableUsers.length" class="mt-4 flex flex-wrap gap-2" @submit.prevent="addMember">
                 <select v-model="memberForm.user_id" required class="border-input bg-background h-9 rounded-md border px-3 text-sm">
                     <option value="" disabled>აირჩიეთ მომხმარებელი</option>
-                    <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.name }} ({{ user.email }})</option>
+                    <!-- Audit A09: a project member is chosen from accounts
+                         while a task's responsible person is chosen from
+                         employees, and the two lists used to share nothing but
+                         a name the operator had to match by eye. Each account
+                         now says which employee it belongs to — and says so
+                         when it belongs to none. -->
+                    <option v-for="user in availableUsers" :key="user.id" :value="user.id">
+                        {{ user.employee_name || user.name }}<template v-if="user.employee_code"> · {{ user.employee_code }}</template>
+                        <template v-if="user.employee_position"> · {{ user.employee_position }}</template>
+                        <template v-if="!user.employee_name"> · თანამშრომელს არ უკავშირდება</template>
+                        ({{ user.email }})
+                    </option>
                 </select>
                 <select v-model="memberForm.role_context" class="border-input bg-background h-9 w-44 rounded-md border px-3 text-sm">
                         <!-- Audit A20: this was a free-text box, so the column
