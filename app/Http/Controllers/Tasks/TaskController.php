@@ -55,6 +55,14 @@ class TaskController extends Controller
 {
     use AuthorizesRequests;
 
+    /**
+     * Audit A07. A Kanban column that silently stops at a page boundary tells
+     * a manager the work is done when it is not, so the board is read whole —
+     * but not unboundedly. At this cap the page says the board is truncated
+     * and points back at the filters, rather than quietly dropping the rest.
+     */
+    private const KANBAN_CARD_LIMIT = 300;
+
     public function index(Request $request, Project $project): Response
     {
         $this->authorize('viewAny', [Task::class, $project]);
@@ -77,14 +85,48 @@ class TaskController extends Controller
             $query->where('priority', $priority);
         }
 
-        $tasks = $query->orderByRaw("case priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end")
-            ->orderBy('due_at')
-            ->paginate(30)
-            ->withQueryString();
+        $query->orderByRaw("case priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end")
+            ->orderBy('due_at');
+
+        // Audit A07: this screen was list-only while the project page linked
+        // to it as „დავალებების სრული სია და Kanban". The board is the same
+        // component the dashboard uses (resources/js/components/tasks/TaskKanban.vue),
+        // so the two screens cannot disagree about which drag means "start
+        // work" and which means "submit for acceptance".
+        $view = $request->string('view')->trim()->value();
+        $view = in_array($view, ['list', 'kanban'], true) ? $view : 'list';
+
+        if ($view === 'kanban') {
+            // A board is read whole, not paged — a column that silently ends
+            // at row 30 is worse than no board. It is still bounded, and the
+            // page says so when the cap is reached rather than quietly
+            // dropping the rest.
+            $cards = (clone $query)->limit(self::KANBAN_CARD_LIMIT + 1)->get();
+            $truncated = $cards->count() > self::KANBAN_CARD_LIMIT;
+
+            return Inertia::render('Tasks/Index', [
+                'project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->code],
+                'view' => 'kanban',
+                'tasks' => TaskResource::collection($cards->take(self::KANBAN_CARD_LIMIT)),
+                'pagination' => null,
+                'kanbanTruncated' => $truncated,
+                'kanbanLimit' => self::KANBAN_CARD_LIMIT,
+                'filters' => ['status' => $status ?: '', 'accountable_owner_employee_id' => $ownerId ?: '', 'priority' => $priority ?: ''],
+                'employees' => EmployeeResource::collection(
+                    Employee::query()->where('status', 'active')->orderBy('last_name')->get()
+                ),
+                'canCreate' => $request->user()->can('create', [Task::class, $project]),
+            ]);
+        }
+
+        $tasks = $query->paginate(30)->withQueryString();
 
         return Inertia::render('Tasks/Index', [
             'project' => ['id' => $project->id, 'name' => $project->name, 'code' => $project->code],
+            'view' => 'list',
             'tasks' => TaskResource::collection($tasks->items()),
+            'kanbanTruncated' => false,
+            'kanbanLimit' => self::KANBAN_CARD_LIMIT,
             'pagination' => [
                 'page' => $tasks->currentPage(),
                 'perPage' => $tasks->perPage(),

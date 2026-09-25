@@ -236,18 +236,28 @@ function formatBytes(bytes: number): string {
         </div>
 
         <div v-else-if="activeTab === 'tasks'" class="flex flex-col gap-4">
+            <!-- Audit A07: these counts used to be inert text next to one
+                 link. Each now opens the workspace already filtered to the
+                 status whose number was clicked, so the figure on the card
+                 and the rows behind it are the same query. -->
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div v-for="status in TASK_STATUS_ORDER" :key="status" class="border-border bg-card rounded-xl border p-4">
+                <Link
+                    v-for="status in TASK_STATUS_ORDER"
+                    :key="status"
+                    :href="`/projects/${project.id}/tasks?status=${status}`"
+                    class="border-border bg-card hover:bg-muted/40 rounded-xl border p-4 transition-colors"
+                >
                     <p class="text-muted-foreground text-xs">{{ TASK_STATUS_LABEL[status] }}</p>
                     <p class="mt-1 text-xl font-semibold">{{ taskStats.by_status[status] ?? 0 }}</p>
-                </div>
+                </Link>
             </div>
             <div v-if="taskStats.overdue > 0" class="border-destructive/30 bg-destructive-soft/30 rounded-xl border p-4 text-sm">
                 {{ taskStats.overdue }} ვადაგადაცილებული დავალება მოითხოვს ყურადღებას.
             </div>
             <EmptyState v-if="totalTasks === 0" title="დავალება ჯერ არ არის" description="დაამატეთ პირველი დავალება ამ პროექტზე." />
-            <div class="flex gap-2">
-                <Button as-child><Link :href="`/projects/${project.id}/tasks`">დავალებების სრული სია და Kanban</Link></Button>
+            <div class="flex flex-wrap gap-2">
+                <Button as-child><Link :href="`/projects/${project.id}/tasks`">დავალებების სია</Link></Button>
+                <Button as-child variant="outline"><Link :href="`/projects/${project.id}/tasks?view=kanban`">Kanban დაფა</Link></Button>
             </div>
         </div>
 

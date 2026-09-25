@@ -20,6 +20,10 @@ class TaskResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            // Audit A07: the Kanban board builds every action URL as
+            // /projects/{project}/tasks/{task}/…, so a card without its
+            // project id cannot be started or submitted at all.
+            'project_id' => $this->project_id,
             'title' => $this->title,
             'status' => $this->status,
             'priority' => $this->priority,
