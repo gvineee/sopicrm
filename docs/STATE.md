@@ -123,9 +123,12 @@ In rough order of value:
    - **WF-02** is already satisfied by the cycle checker. **WF-03…06**
      (drawing revisions, cancelling partial work, return history, reviewer
      deadlines), **OFF-01…04**, **UI-01…04**, **INT-01/02** remain.
-2. **The BioStar read-only connector** (spec-02 §7). Event import does not
-   depend on either device-side blocker above; accurate session pairing does.
-   Build the import, and make the unknown-exit case say so.
+2. **BioStar session pairing.** The read path is now live and proven against
+   the real server (see §6), but the two doors both have `exit_device: NONE`,
+   so BioStar itself does not know which reader is an entry and which an exit.
+   Until somebody configures that, `reader_role` is `unspecified` on both
+   devices and attendance cannot pair a swipe into a worked interval. Make the
+   unknown-exit case say so rather than guessing a direction.
 3. **Spec-02's remaining stages.** That document is the full product spec and
    most of it is still ahead.
 
@@ -158,7 +161,47 @@ In rough order of value:
   no `project_id`, so that service gathers children by id and documents the
   one case it cannot cover.
 
-## 5. History
+## 5. The live BioStar install, as it actually is
+
+Verified against the real server, not assumed:
+
+- Two XPass 2 readers: `544452272` („შემოსასვლელი", the yard gate) and
+  `544452273` („აღრიცხვა"). Both doors have `exit_device: NONE`.
+- Every real badge read so far is on the gate; the attendance reader has none.
+- **The device clock runs about three hours behind.** `server_datetime` is the
+  trustworthy UTC and is what `normalized_event_time_utc` stores;
+  `raw_device_time` keeps the device's claim beside it so the drift stays
+  visible instead of being quietly corrected away.
+- **Never filter BioStar's event search by date server-side.** Its only date
+  condition matches on `datetime` — the device's own wrong clock — so a window
+  request silently drops real events at the boundary. Ask for a bounded number
+  of the newest rows and apply the window locally against `server_datetime`.
+  `biostar:import-events` does this; measured, it recovered 50 of 451 events
+  the server-side filter had been dropping.
+- BioStar reports card ids in **decimal**; the CRM's ingest reads **hex**.
+  `CardIdentifierNormalizer::fromDecimal()` is the only correct bridge.
+- BioStar user id 1 is its own built-in `Administrator` — an operator login,
+  not staff. Skipped via `devices.biostar.ignored_user_ids`.
+- Nothing in `App\Domain\Devices\Services\BiostarReadClient` writes to BioStar,
+  and nothing should be added there that does. The write path belongs in the
+  device-connector, behind `biostar_write_dispatch_enabled`.
+
+### A mistake worth not repeating
+
+A check run from `artisan tinker` without setting the RLS GUC reported that the
+organization had **zero** employees. It had three; row-level security was
+simply hiding them. Acting on that reading created a duplicate employee for a
+person who was already on the roster.
+
+Any console or tinker script that reads tenant data must set the GUC first:
+
+```php
+DB::statement("select set_config('app.current_org_id', ?, false)", [$orgId]);
+```
+
+An empty result from a console context is not evidence that a table is empty.
+
+## 6. History
 
 `docs/agent-handoff.md`, `docs/claude-overnight-progress.md` and
 `docs/decisions.md` hold the longer record of earlier passes.
