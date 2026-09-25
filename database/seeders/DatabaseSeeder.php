@@ -30,6 +30,30 @@ class DatabaseSeeder extends Seeder
             return;
         }
 
+        // Audit A26. `APP_ENV=production` is not the only way an instance can
+        // be real. This one ran with `APP_ENV=local` while being served to the
+        // internet through a tunnel, so the guard above was satisfied on paper
+        // and the demo accounts below — all of them authenticating with the
+        // literal password `password`, because UserFactory hashes exactly that
+        // — were live on a public address.
+        //
+        // The URL the application answers on is the honest test of whether
+        // anyone outside can reach it.
+        $appUrl = (string) config('app.url');
+        $host = parse_url($appUrl, PHP_URL_HOST) ?: $appUrl;
+        $isLocalHost = in_array($host, ['localhost', '127.0.0.1', '::1', 'host.docker.internal'], true)
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.test');
+
+        if (! $isLocalHost && ! app()->runningUnitTests()) {
+            $this->command->warn(
+                "დემო ანგარიშები არ შექმნილა: APP_URL ({$appUrl}) ლოკალური არ არის. ".
+                'ნაგულისხმევპაროლიანი ანგარიშები საჯაროდ ხელმისაწვდომ მისამართზე არ იქმნება.'
+            );
+
+            return;
+        }
+
         /** @var Organization $organization */
         $organization = Organization::factory()->create(['name' => 'ODA Demo']);
 
