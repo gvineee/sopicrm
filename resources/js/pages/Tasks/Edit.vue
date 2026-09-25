@@ -167,7 +167,25 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-3">
                 <div class="grid gap-2"><Label>ვადა</Label><Input v-model="form.due_at" type="datetime-local" /></div>
                 <div class="grid gap-2"><Label>ხანგრძლივობა (წთ)</Label><Input v-model="form.planned_duration_minutes" type="number" min="1" /></div>
-                <div class="grid gap-2"><Label>ერთეული</Label><Input v-model="form.unit" /></div>
+                <div class="grid gap-2">
+                    <Label>ერთეული</Label>
+                    <!-- Audit A19: a plain text box let "20" be typed here and
+                         the quantity left empty, which the detail page then
+                         rendered as „0.00 / — 20". A datalist keeps units
+                         configurable (the spec is explicit that they are not a
+                         fixed enum) while offering the ones actually used. -->
+                    <Input v-model="form.unit" list="task-units" placeholder="მ², ცალი..." />
+                    <datalist id="task-units">
+                        <option value="მ²" />
+                        <option value="მ³" />
+                        <option value="გრძ.მ" />
+                        <option value="ცალი" />
+                        <option value="ტ" />
+                        <option value="კგ" />
+                        <option value="ლ" />
+                        <option value="სთ" />
+                    </datalist>
+                </div>
             </div>
             <div class="grid gap-2 sm:grid-cols-2 sm:gap-4">
                 <div class="grid gap-2"><Label>დაგეგმილი მოცულობა</Label><Input v-model="form.planned_quantity" type="number" min="0" step="0.01" /></div>

@@ -45,8 +45,13 @@ class UpdateTaskRequest extends FormRequest
             'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'urgent'])],
             'due_at' => ['nullable', 'date'],
             'planned_duration_minutes' => ['nullable', 'integer', 'min:1'],
-            'unit' => ['nullable', 'string', 'max:50'],
-            'planned_quantity' => ['nullable', 'numeric', 'min:0'],
+            // Audit A19: „მოცულობა ჩანს ფორმით `0.00 / — 20`; რედაქტირებაში
+            // ერთეულია `20`, დაგეგმილი რაოდენობა ცარიელია." The two fields
+            // only mean anything together: a unit with no quantity measures
+            // nothing, and a quantity with no unit does not say of what. Each
+            // now requires the other, so the pair cannot be half-filled.
+            'unit' => ['nullable', 'string', 'max:50', 'required_with:planned_quantity'],
+            'planned_quantity' => ['nullable', 'numeric', 'min:0', 'required_with:unit'],
             // TM-01: the self-close carve-out is cancelled. The column
             // survives as history (§17) but nothing in the workflow reads it,
             // so no request may set it either — accepting a value here would
@@ -80,6 +85,17 @@ class UpdateTaskRequest extends FormRequest
                 'uuid',
                 Rule::exists('tasks', 'id')->where('organization_id', $organizationId),
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'unit.required_with' => 'მიუთითეთ ერთეული (მაგ. მ², ცალი) — რიცხვი ერთეულის გარეშე გაუგებარია.',
+            'planned_quantity.required_with' => 'მიუთითეთ დაგეგმილი მოცულობა — ერთეული რაოდენობის გარეშე არაფერს ზომავს.',
         ];
     }
 }

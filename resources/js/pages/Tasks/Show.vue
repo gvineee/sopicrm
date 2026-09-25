@@ -266,7 +266,18 @@ function addComment() {
                 <p class="text-muted-foreground mt-2 text-sm whitespace-pre-line">{{ task.description || 'აღწერა არ არის მითითებული.' }}</p>
                 <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
                     <div><dt class="text-muted-foreground">ვადა</dt><dd>{{ task.due_at ? new Date(task.due_at).toLocaleString('ka-GE') : '—' }}</dd></div>
-                    <div><dt class="text-muted-foreground">მოცულობა</dt><dd>{{ task.accepted_quantity ?? 0 }} / {{ task.planned_quantity ?? '—' }} {{ task.unit || '' }}</dd></div>
+                    <!-- Audit A19: this read „0.00 / — 20" when someone had
+                         typed the number into the unit field and left the
+                         planned quantity empty. A task with no planned volume
+                         is a yes/no task, so it now says so rather than
+                         printing a placeholder division. -->
+                    <div>
+                        <dt class="text-muted-foreground">მოცულობა</dt>
+                        <dd v-if="task.planned_quantity">
+                            {{ task.accepted_quantity ?? 0 }} / {{ task.planned_quantity }}<template v-if="task.unit"> {{ task.unit }}</template>
+                        </dd>
+                        <dd v-else>მოცულობით არ იზომება</dd>
+                    </div>
                 </dl>
             </section>
 

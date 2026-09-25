@@ -315,3 +315,49 @@ test('the cancelled self-close flag cannot be set from either form', function ()
     CurrentOrganization::set($this->organization->id);
     expect(Task::query()->where('title', 'ახალი დავალება')->sole()->self_close_allowed)->toBeFalse();
 });
+
+test('A19: a unit and a planned quantity are only accepted together', function () {
+    // The reported symptom was a task detail reading „0.00 / — 20": someone had
+    // typed the number into the unit box and left the quantity empty, and
+    // nothing stopped them.
+    $this->actingAs($this->managerA)
+        ->put(route('projects.tasks.update', [$this->project, $this->task]), ($this->basePayload)([
+            'unit' => '20',
+        ]))
+        ->assertSessionHasErrors('planned_quantity');
+
+    CurrentOrganization::set($this->organization->id);
+
+    $this->actingAs($this->managerA)
+        ->put(route('projects.tasks.update', [$this->project, $this->task]), ($this->basePayload)([
+            'planned_quantity' => '50',
+        ]))
+        ->assertSessionHasErrors('unit');
+
+    CurrentOrganization::set($this->organization->id);
+
+    // Both together is fine, and so is neither — a task that is not measured
+    // by volume is a normal thing, not an incomplete form.
+    $this->actingAs($this->managerA)
+        ->put(route('projects.tasks.update', [$this->project, $this->task]), ($this->basePayload)([
+            'unit' => 'მ²',
+            'planned_quantity' => '50',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    CurrentOrganization::set($this->organization->id);
+
+    // Clearing both is how a task stops being measured by volume. The form
+    // sends explicit nulls for emptied fields; omitting a key entirely means
+    // "leave it alone", which is the same rule the collections follow.
+    $this->actingAs($this->managerA)
+        ->put(route('projects.tasks.update', [$this->project, $this->task]), ($this->basePayload)([
+            'unit' => null,
+            'planned_quantity' => null,
+        ]))
+        ->assertSessionHasNoErrors();
+
+    CurrentOrganization::set($this->organization->id);
+    expect($this->task->refresh()->unit)->toBeNull()
+        ->and($this->task->planned_quantity)->toBeNull();
+});
