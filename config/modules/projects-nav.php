@@ -17,6 +17,14 @@ return [
                 'permission' => ['projects.view', 'projects.viewAny'],
             ],
             [
+                // Audit A24: there was no route into client management from
+                // anywhere in the product.
+                'label' => 'კლიენტები',
+                'icon' => 'contact',
+                'route' => 'clients.index',
+                'permission' => ['projects.view', 'projects.clients.manage'],
+            ],
+            [
                 'label' => 'დავალებების კალენდარი',
                 'icon' => 'calendar-check',
                 'route' => 'tasks.calendar',

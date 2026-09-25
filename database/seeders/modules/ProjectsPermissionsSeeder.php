@@ -25,6 +25,12 @@ class ProjectsPermissionsSeeder extends Seeder
             'projects.wbs.manage',
             'projects.documents.manage',
             'projects.budget.view',
+            // Audit A24: this permission was referenced by
+            // App\Policies\ClientPolicy but never actually created, so
+            // `create`/`update` there could not return true for anyone. The
+            // client dropdown on the project form was therefore permanently
+            // empty and no route existed to fill it.
+            'projects.clients.manage',
         ];
 
         foreach ($permissions as $permission) {
@@ -43,6 +49,10 @@ class ProjectsPermissionsSeeder extends Seeder
                 'projects.wbs.manage',
                 'projects.documents.manage',
                 'projects.budget.view',
+                // A project manager creates and edits projects, so they must
+                // be able to name the client a project is for; withholding
+                // this is what left the dropdown unfillable.
+                'projects.clients.manage',
             ],
         ];
 

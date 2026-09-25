@@ -13,6 +13,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * docs/data-model.md "clients".
+ *
+ * Declared because the cast below reads the json column as an array; without
+ * it the inferred type stays the raw column and assigning one looks wrong.
+ *
+ * @property array<string, mixed>|null $contact_info
  */
 class Client extends Model
 {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Contractors\TaskContractorAssignmentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Projects\ClientController;
 use App\Http\Controllers\Projects\ProjectController;
 use App\Http\Controllers\Projects\ProjectDocumentController;
 use App\Http\Controllers\Projects\ProjectLocationController;
@@ -21,6 +22,13 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // Owned by DashboardController so it shares that controller's own
     // visibility + filter helpers with the counts themselves.
     Route::get('tasks-overview', [DashboardController::class, 'tasks'])->name('tasks.overview');
+
+    // Audit A24: the project form's „კლიენტი" dropdown had no screen anywhere
+    // that could fill it. Clients are separate from Companies (our own legal
+    // entities) and from Contractors (hired to do part of the work).
+    Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
+    Route::post('clients', [ClientController::class, 'store'])->name('clients.store');
+    Route::put('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
 
     Route::resource('projects', ProjectController::class);
     Route::post('projects/{project}/status', [ProjectController::class, 'changeStatus'])->name('projects.status');
