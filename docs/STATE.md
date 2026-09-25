@@ -4,7 +4,7 @@ Written so a session with no memory of the earlier work can pick up from here.
 Read `CLAUDE.md` first for how to run the project and what the hard
 constraints are.
 
-At the latest commit: **428 tests, 424 passed, 4 skipped**, phpstan 0 errors,
+At the latest commit: **444 tests, 440 passed, 4 skipped**, phpstan 0 errors,
 pint clean, `vue-tsc` clean, `npm run build` clean, no pending migrations,
 working tree clean, everything pushed to `origin/main`.
 
@@ -69,7 +69,25 @@ actually involved, because several were deeper than the audit described:
 | A26 | Every account in the database had the password `password` |
 
 **Spec-03 stage 1 (two-person acceptance) is complete and covered**: TM-01…TM-09,
-DV-02…DV-06, DV-08, EV-01…EV-04, Q-01…Q-07, SEC-01…SEC-05, MIG-01, MIG-02.
+DV-01…DV-06, DV-08, EV-01…EV-04, Q-01…Q-07, SEC-01…SEC-05, MIG-01, MIG-02,
+plus **WF-01** (dependencies enforced before work may begin).
+
+Two modules were added after the audit closed:
+
+- **Task audit trail (DV-01).** The Tasks domain wrote no audit events at all
+  — sixteen Actions, not one call to AuditLogger. `TaskAuditRecorder` is now
+  the single place they are written, hooked into `TaskStatusEventRecorder` so
+  a transition cannot land in the status history and skip the trail. Every row
+  carries the task id, project id and the revision it describes. Task history
+  reaches the project activity feed. Found while wiring it:
+  `ToggleChecklistItem` was dead code — the controller duplicated its body
+  inline, bypassing the domain layer entirely.
+- **Dependency readiness (§9, WF-01).** Dependencies were recorded and never
+  enforced, so work could begin and finish while the work it depends on was
+  unaccepted — §9.2's covered-work case. `TaskReadiness` enforces it inside
+  StartTask's transaction, counts only `completed` (not `submitted`) as
+  satisfied, treats `cancelled` as satisfied so nothing is stranded, and names
+  the specific predecessors in the way.
 
 ### Seven bugs found that the audit had not listed
 
@@ -98,14 +116,13 @@ In rough order of value:
 
 1. **Finish spec-03 §16.** Still unwritten, with the reason each one is not
    just an oversight:
-   - **DV-01** (two audit records for issue/receipt) — the whole Tasks domain
-     writes no `AuditEvent` at all. `grep -rn "AuditLogger" app/Domain/Tasks`
-     returns nothing. This is the largest real gap.
    - **DV-07** (temporary reviewer substitution) — no delegation entity exists.
    - **EV-05** (task changed while a reviewer was looking at the snapshot).
    - **Q-08** and the work-lot half of **Q-06** — no work-lot or parent/child
      quantity entity exists.
-   - **WF-01…06**, **OFF-01…04**, **UI-01…04**, **INT-01/02**.
+   - **WF-02** is already satisfied by the cycle checker. **WF-03…06**
+     (drawing revisions, cancelling partial work, return history, reviewer
+     deadlines), **OFF-01…04**, **UI-01…04**, **INT-01/02** remain.
 2. **The BioStar read-only connector** (spec-02 §7). Event import does not
    depend on either device-side blocker above; accurate session pairing does.
    Build the import, and make the unknown-exit case say so.
@@ -131,6 +148,11 @@ In rough order of value:
   for accepted volume; `tasks.accepted_quantity` is a cache of it.
 - `App\Domain\Attendance\Models\RawAccessEvent::scopeExcludingSimulated()` must
   be applied by anything that computes worked time, a timesheet or money.
+- `App\Domain\Tasks\Services\TaskAuditRecorder` is the only place task audit
+  rows are written, and `TaskStatusEventRecorder` calls it — add a new task
+  Action and its transition is audited without doing anything.
+- `App\Domain\Tasks\Services\TaskReadiness` decides whether work may begin.
+  Anything that starts work must go through it.
 - There is no `AuditEvent` read UI other than the project activity feed
   (`App\Domain\Projects\Services\ProjectActivityFeed`), and `audit_events` has
   no `project_id`, so that service gathers children by id and documents the
