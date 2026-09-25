@@ -61,6 +61,7 @@ class AuthModuleServiceProvider extends ServiceProvider
 
         $this->registerPolicies();
         $this->registerFinancialAccessGate();
+        $this->registerOrganizationManagementGate();
         $this->registerLoginAuditListeners();
         $this->pushSharedMiddleware();
     }
@@ -89,6 +90,20 @@ class AuthModuleServiceProvider extends ServiceProvider
             return $user instanceof User
                 && $user->can('finance.access')
                 && $user->two_factor_confirmed_at !== null;
+        });
+    }
+
+    /**
+     * Creating, renaming and deleting whole organizations is a platform
+     * concern above any one tenant's roles, so no spatie permission grants
+     * it: only `users.is_platform_admin` (ADMIN-01). Used by the
+     * platform.organizations.* routes and their nav entry
+     * (config/modules/platform-nav.php).
+     */
+    private function registerOrganizationManagementGate(): void
+    {
+        Gate::define('manage-organizations', function (Authenticatable $user): bool {
+            return $user instanceof User && $user->is_platform_admin;
         });
     }
 
