@@ -1,9 +1,11 @@
 # HANDOFF — state as of 2026-09-25
 
 Everything below is committed and pushed to `origin/main` unless it says
-otherwise. Gates at the latest commit: **423 tests, 419 passed, 4 skipped**,
-phpstan 0 errors, pint clean, `vue-tsc` clean, `npm run build` clean, no
-pending migrations.
+otherwise. Gates at the latest commit: **428 tests, 424 passed, 4 skipped**, phpstan 0
+errors, pint clean, `vue-tsc` clean, `npm run build` clean, no pending
+migrations, working tree clean.
+
+**All 26 items of 01-CRM-Audit-KA.md are closed.**
 
 ---
 
@@ -25,7 +27,13 @@ state. The remaining steps are the owner's:
 
 1. Change the real account's password at `/settings/security`.
 2. Disable or delete the seven demo accounts.
-3. Consider closing the tunnel until both are done.
+3. Consider closing the tunnel until step 1 is done.
+
+The seven demo accounts have since been disabled at the owner's request
+(`php artisan security:disable-demo-accounts --apply`), and that was verified
+against the running application: signing in as `test@example.com` with its
+correct password is now refused. **The real account's password is still
+`password`** — only the owner can change that.
 
 `DatabaseSeeder` no longer trusts `APP_ENV` alone — it now refuses to create
 demo accounts when `APP_URL` is not a local host.
@@ -91,24 +99,24 @@ work-lot half of **Q-06** (no work-lot or parent/child quantity entity),
 
 ---
 
-## 4. What is deliberately NOT done
+## 4. The navigation files, now taken over
 
-**A17 (menu hierarchy) and half of A25** (mobile „პროფილი" goes to account
-settings while desktop „ჩემი პროფილი" goes to the work profile) both live in
-navigation files that another process has had uncommitted since
-2026-09-21 23:43:
+A17 (menu hierarchy) and half of A25 (mobile „პროფილი") lived in navigation
+files another process had left uncommitted since 2026-09-21. The owner asked
+for that work to be taken over rather than reverted, so it was reviewed, kept,
+finished and committed. The working tree is now clean.
 
-`app/Domain/Shared/Services/NavigationService.php`,
-`config/modules/shared-nav.php`, `docs/architecture.md`,
-`resources/js/components/AppSidebar.vue`,
-`resources/js/components/mobile/{BottomNav,MobileTopBar}.vue`,
-`resources/js/lib/mobileNav.ts`.
+What that work does: the sidebar is ordered by daily work rather than by the
+order module config files are globbed in (and a group nobody named in that
+order still appears, at the end, so ordering never becomes a filter); a
+„ჩემი სამუშაო" group gathers the screens a worker actually opens; and the
+mobile bottom bar is built from the user's own server-filtered navigation
+instead of five fixed slots.
 
-Every session so far has left them alone. They have not been touched in days,
-so the work is probably abandoned — but that is the owner's call, not a
-guess to act on.
-
----
+Finished on top of it: the bottom bar's person-shaped tab is named „ანგარიში",
+because it opens the ACCOUNT settings screen, while the menu's „ჩემი პროფილი"
+opens the WORK profile. Two different pages behind two names that read the
+same is how a person concludes one of them is broken.
 
 ## 5. BioStar 2 — verified, then blocked
 
