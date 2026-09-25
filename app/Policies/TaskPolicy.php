@@ -276,9 +276,23 @@ class TaskPolicy
         return false;
     }
 
+    /**
+     * The employee record behind an account, for the purpose of deciding what
+     * they may do on a task.
+     *
+     * A person still awaiting verification is deliberately not one. They were
+     * created from a BioStar door enrolment, which says they can open a door
+     * and nothing about which department they belong to or what they may do
+     * here — so until somebody with the authority has vouched for them, they
+     * are neither a performer nor a reviewer. Their badge reads are still
+     * attributed to them; it is standing in the workflow they do not have yet.
+     */
     private function employeeOf(User $user): ?Employee
     {
-        return Employee::query()->where('user_id', $user->id)->first();
+        return Employee::query()
+            ->where('user_id', $user->id)
+            ->where('status', '!=', Employee::STATUS_PENDING_VERIFICATION)
+            ->first();
     }
 
     /**

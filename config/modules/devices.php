@@ -25,4 +25,33 @@ return [
     // adapter-side check in services/device-connector/src/adapters/
     // suprema-device-gateway.js — both boundaries must agree.
     'biostar_write_dispatch_enabled' => filter_var(env('BIOSTAR_WRITE_DISPATCH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    // Everything the read-only BioStar client needs. It lives here rather than
+    // being read from `env()` at the call site because `config:cache` — which
+    // any real deployment runs — makes `env()` return null outside this
+    // directory, and a BioStar client that silently loses its base URL in
+    // production is exactly the kind of failure that only shows up there.
+    'biostar' => [
+        'base_url' => env('BIOSTAR_BASE_URL', ''),
+        'username' => env('BIOSTAR_USERNAME', ''),
+        'password' => env('BIOSTAR_PASSWORD', ''),
+        'request_timeout_ms' => (int) env('BIOSTAR_REQUEST_TIMEOUT_MS', 15000),
+
+        // The LAN server presents a certificate signed by a private CA.
+        // Pointing at that CA is the correct fix; verification is only relaxed
+        // where a deployment has explicitly been configured that way.
+        'ca_cert_path' => env('BIOSTAR_CA_CERT_PATH'),
+        'verify_tls' => filter_var(env('BIOSTAR_VERIFY_TLS', true), FILTER_VALIDATE_BOOLEAN),
+
+        // BioStar 2 creates user id 1 as its own built-in `Administrator`
+        // account when the server is installed. It is an operator login for
+        // the access system, not a member of staff, and the first live sync
+        // duly filed it as a person awaiting a department. Configurable
+        // because an install that has since reused that record for a real
+        // person must be able to say so.
+        'ignored_user_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('BIOSTAR_IGNORED_USER_IDS', '1')),
+        ), fn (string $id) => $id !== '')),
+    ],
 ];

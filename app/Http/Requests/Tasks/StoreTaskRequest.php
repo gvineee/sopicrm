@@ -31,7 +31,13 @@ class StoreTaskRequest extends FormRequest
             'work_package_id' => ['nullable', 'uuid'],
             'accountable_owner_employee_id' => [
                 'required', 'uuid',
-                Rule::exists('employees', 'id')->where('organization_id', $organizationId),
+                // Not merely "an employee of this organization": a person
+                // still awaiting verification cannot be made responsible for
+                // work, because nobody has yet said which department they
+                // belong to or what they may do here.
+                Rule::exists('employees', 'id')
+                    ->where('organization_id', $organizationId)
+                    ->where(fn ($query) => $query->where('status', '!=', 'pending_verification')),
             ],
             'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'urgent'])],
             'due_at' => ['nullable', 'date'],

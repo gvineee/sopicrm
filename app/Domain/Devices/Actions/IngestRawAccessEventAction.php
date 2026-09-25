@@ -28,6 +28,7 @@ class IngestRawAccessEventAction
      *     raw_device_time: string,
      *     event_code: string,
      *     server_time?: string|null,
+     *     external_user_ref?: string|null,
      *     event_subcode?: string|null,
      *     card_type?: string|null,
      *     card_hex?: string|null,
@@ -92,6 +93,16 @@ class IngestRawAccessEventAction
                 'ingestion_source' => $eventData['ingestion_source'] ?? 'device-connector',
             ]);
 
+            // The vendor's own person id, recorded so BioStar's user can be
+            // tied to a CRM employee by something that survives a card being
+            // replaced. Registered whether or not the card matched: the two
+            // identify the same person by different means, and the person
+            // outlives the card.
+            $externalUserRef = $eventData['external_user_ref'] ?? null;
+            if (is_string($externalUserRef) && $externalUserRef !== '') {
+                $this->registerExternalUserForTriage($externalUserRef);
+            }
+
             $this->detectStreamAnomalies($device, $event, $checkpoint);
             $this->detectClockDrift($device, $event, $credential, $eventData['clock_offset_seconds'] ?? null);
             $this->advanceCheckpoint($device, $checkpoint, $streamEpoch, $nativeEventId);
@@ -127,6 +138,26 @@ class IngestRawAccessEventAction
             ->first();
 
         return [$credential, $credential === null ? "{$normalized->cardType}:{$normalized->rawBytesHex}" : null];
+    }
+
+    /**
+     * The BioStar person behind a swipe, made linkable to a CRM employee.
+     * Like the card equivalent below this creates nothing and claims nothing
+     * — it is a durable "this person exists upstream" marker an administrator
+     * confirms, and `firstOrCreate` keeps a daily swipe from filing a new row
+     * every morning.
+     */
+    private function registerExternalUserForTriage(string $reference): void
+    {
+        ExternalIdentifierMapping::query()->firstOrCreate(
+            [
+                'source_system' => 'biostar',
+                'source_instance_key' => 'default',
+                'external_type' => 'user',
+                'external_identifier' => $reference,
+            ],
+            ['status' => 'pending', 'first_seen_at' => now()],
+        );
     }
 
     /**
@@ -195,10 +226,33 @@ class IngestRawAccessEventAction
             ->activeAt($event->normalized_event_time_utc)
             ->value('employee_id');
 
-        $this->createAnomaly($device, $event, 'clock_drift', [
+        $details = [
             'clock_offset_seconds' => $clockOffsetSeconds,
             'threshold_seconds' => (int) config('devices.clock_drift_threshold_seconds', 300),
-        ], is_string($employeeId) ? $employeeId : null);
+            'latest_raw_access_event_id' => $event->id,
+        ];
+
+        // A wrong clock is a condition of the DEVICE, not of each badge read
+        // it timestamps. Filing one anomaly per event buried a real finding
+        // under 388 identical rows on the first live import — the same single
+        // fact, restated once per swipe, on a page an administrator is
+        // supposed to be able to work through. So while one is still open for
+        // this device it is refreshed rather than duplicated, and a new row
+        // appears only once somebody has resolved the previous one and the
+        // clock has drifted again.
+        $open = AttendanceAnomaly::query()
+            ->where('device_id', $device->id)
+            ->where('anomaly_type', 'clock_drift')
+            ->whereNull('resolved_at')
+            ->first();
+
+        if ($open !== null) {
+            $open->update(['details' => $details]);
+
+            return;
+        }
+
+        $this->createAnomaly($device, $event, 'clock_drift', $details, is_string($employeeId) ? $employeeId : null);
     }
 
     private function advanceCheckpoint(

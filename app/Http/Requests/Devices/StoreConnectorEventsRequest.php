@@ -28,6 +28,11 @@ class StoreConnectorEventsRequest extends FormRequest
             // Without this, every worked hour computed from those events would
             // have been wrong by that much.
             'events.*.server_time' => ['nullable', 'date'],
+            // The upstream system's own id for the PERSON who swiped. A card
+            // can be replaced, lost or reissued; this identifier survives
+            // that, so it is what a durable BioStar-person -> CRM-employee
+            // link is anchored on.
+            'events.*.external_user_ref' => ['nullable', 'string', 'max:128'],
             'events.*.event_code' => ['required', 'string', 'max:100'],
             'events.*.event_subcode' => ['nullable', 'string', 'max:100'],
             'events.*.card_type' => ['nullable', 'required_with:events.*.card_hex', 'string', 'max:100'],
@@ -45,6 +50,7 @@ class StoreConnectorEventsRequest extends FormRequest
      *     stream_epoch: int,
      *     raw_device_time: string,
      *     server_time?: string|null,
+     *     external_user_ref?: string|null,
      *     event_code: string,
      *     event_subcode?: string|null,
      *     card_type?: string|null,

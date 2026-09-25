@@ -27,6 +27,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * plaintext; the *display*-time permission gate (masking it in low-privilege
  * views) is a Policy/Resource-layer concern for the Employees module agent,
  * not something the Eloquent cast itself can express.
+ *
+ * `status` is declared here because static analysis otherwise infers the set of
+ * allowed values from the original `enum` in the create-table migration, and so
+ * does not know about `pending_verification` — which a later additive migration
+ * added by widening the PostgreSQL CHECK constraint rather than by rewriting
+ * the column. Left undeclared, every `$employee->status !== self::STATUS_PENDING_VERIFICATION`
+ * guard reads as trivially true and the code enforcing it reads as dead.
+ *
+ * @property 'active'|'inactive'|'terminated'|'pending_verification' $status
+ * @property string|null $biostar_user_id
  */
 class Employee extends Model
 {
@@ -37,10 +47,23 @@ class Employee extends Model
 
     protected $keyType = 'string';
 
+    /**
+     * A person created from a BioStar sync exists and is matched to their
+     * swipes, but is explicitly not yet a working member of staff: no
+     * department, no confirmed permissions. Distinct from `inactive`, which
+     * means a person the organization knows and has stood down.
+     */
+    public const STATUS_PENDING_VERIFICATION = 'pending_verification';
+
+    public const STATUS_ACTIVE = 'active';
+
     protected $fillable = [
         'organization_id',
         'company_id',
         'internal_code',
+        // BioStar's own id for this person. A card can be reissued; this does
+        // not change, so it is the durable anchor between the two systems.
+        'biostar_user_id',
         'first_name',
         'last_name',
         'phone',

@@ -82,6 +82,52 @@ test('measured excessive clock offset creates a clock drift anomaly', function (
         ->exists())->toBeTrue();
 });
 
+test('a device with a wrong clock is reported once, not once per badge read', function () {
+    $action = app(IngestRawAccessEventAction::class);
+
+    // The first live import produced 388 identical clock-drift rows from a
+    // single misconfigured reader — one real finding, restated once per
+    // swipe, on a page somebody is meant to work through.
+    foreach (range(1, 5) as $id) {
+        $action->execute($this->device, [
+            'native_event_id' => $id,
+            'stream_epoch' => 0,
+            'raw_device_time' => now()->toIso8601String(),
+            'event_code' => 'access_granted',
+            'clock_offset_seconds' => 10_800 + $id,
+        ]);
+    }
+
+    $anomaly = AttendanceAnomaly::query()
+        ->where('device_id', $this->device->id)
+        ->where('anomaly_type', 'clock_drift')
+        ->sole();
+
+    // Still current: the one open row carries the latest measurement rather
+    // than freezing on whatever the first swipe of the day happened to be.
+    expect($anomaly->details['clock_offset_seconds'])->toBe(10_805);
+});
+
+test('a clock that drifts again after being resolved is reported again', function () {
+    $action = app(IngestRawAccessEventAction::class);
+    $base = [
+        'stream_epoch' => 0,
+        'raw_device_time' => now()->toIso8601String(),
+        'event_code' => 'access_granted',
+        'clock_offset_seconds' => 601,
+    ];
+
+    $action->execute($this->device, $base + ['native_event_id' => 1]);
+
+    AttendanceAnomaly::query()->where('anomaly_type', 'clock_drift')->update(['resolved_at' => now()]);
+
+    $action->execute($this->device, $base + ['native_event_id' => 2]);
+
+    // Suppression is tied to an OPEN anomaly, so closing one does not make
+    // the device permanently unable to report the same fault twice.
+    expect(AttendanceAnomaly::query()->where('anomaly_type', 'clock_drift')->count())->toBe(2);
+});
+
 test('raw access events reject updates and deletes', function () {
     $event = app(IngestRawAccessEventAction::class)->execute($this->device, [
         'native_event_id' => 1,

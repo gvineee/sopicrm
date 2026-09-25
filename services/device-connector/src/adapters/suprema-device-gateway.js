@@ -492,6 +492,10 @@ export class SupremaDeviceGatewayAdapter {
                 // stays visible instead of being quietly corrected away.
                     server_time: row.server_datetime ?? null,
                     clock_offset_seconds: clockOffsetSeconds(row),
+                    // BioStar's own id for the person. A card can be reissued;
+                    // this does not change, so it is the durable anchor for a
+                    // BioStar-person -> CRM-employee link.
+                    external_user_ref: row?.user_id?.user_id ? String(row.user_id.user_id) : null,
                 // Mapped, not forwarded raw: the attendance rebuild excludes
                 // `access_denied`, and an unmapped `biostar:6401` would have
                 // sailed past that exclusion and counted a refused badge as
