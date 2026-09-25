@@ -72,6 +72,34 @@ class NavigationService
             }
         }
 
+        // Keep the sidebar oriented around the user's daily work instead of
+        // the alphabetical order in which module config files are loaded.
+        $preferredOrder = [
+            'ჩემი სამუშაო',
+            'მიმოხილვა',
+            'პროექტები',
+            'თანამშრომლები',
+            'დასწრება',
+            'ანაზღაურება',
+            'ინვენტარი',
+            'მოწყობილობები',
+            'ორგანიზაცია',
+            'კლიენტები',
+            'ხარისხი და უსაფრთხოება',
+            'დოკუმენტები',
+            'ანგარიშები',
+            'ადმინისტრირება',
+            'პარამეტრები',
+        ];
+
+        usort($groupOrder, static function (string $left, string $right) use ($preferredOrder): int {
+            $leftPosition = array_search($left, $preferredOrder, true);
+            $rightPosition = array_search($right, $preferredOrder, true);
+
+            return ($leftPosition === false ? PHP_INT_MAX : $leftPosition)
+                <=> ($rightPosition === false ? PHP_INT_MAX : $rightPosition);
+        });
+
         return array_map(
             fn (string $group): array => ['group' => $group, 'items' => $itemsByGroup[$group]],
             $groupOrder

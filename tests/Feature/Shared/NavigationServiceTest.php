@@ -114,3 +114,53 @@ describe('a real second module nav file dropped into config/modules', function (
             ->toBe(['ყველასთვის ხილული', 'მხოლოდ ფინანსისტისთვის']);
     });
 });
+
+test('A17: the sidebar is ordered by daily work, not by the order config files happen to load', function () {
+    // The audit found ten headings and twenty-eight destinations in one tall,
+    // separately-scrolling list, with everyday work, finance and technical
+    // settings all on the same footing. The order is now deliberate, so the
+    // groups a person uses daily come first instead of arriving in whatever
+    // sequence the module config files were globbed in.
+    $user = User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+    ]);
+    $user->assignRole('owner');
+
+    $groups = collect(app(NavigationService::class)->groupsForUser($user))->pluck('group')->all();
+
+    $position = fn (string $group) => array_search($group, $groups, true);
+
+    expect($position('ჩემი სამუშაო'))->not->toBeFalse()
+        ->and($position('მიმოხილვა'))->not->toBeFalse();
+
+    // Daily work before administration, and administration before settings.
+    foreach ([['ჩემი სამუშაო', 'ადმინისტრირება'], ['პროექტები', 'ადმინისტრირება']] as [$earlier, $later]) {
+        if ($position($later) === false) {
+            continue;
+        }
+
+        expect($position($earlier))->toBeLessThan($position($later));
+    }
+});
+
+test('A17: a group nobody named in the preferred order still appears, at the end', function () {
+    // Ordering must not become a filter: a module that ships a group the list
+    // does not mention has to stay reachable, or adding a module would
+    // silently hide it.
+    $user = User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+    ]);
+    $user->assignRole('owner');
+
+    $groups = app(NavigationService::class)->groupsForUser($user);
+    $labels = collect($groups)->pluck('group');
+
+    expect($labels->unique()->count())->toBe($labels->count())
+        ->and($groups)->not->toBeEmpty();
+
+    foreach ($groups as $group) {
+        expect($group['items'])->not->toBeEmpty();
+    }
+});

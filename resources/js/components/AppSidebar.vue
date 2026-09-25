@@ -40,34 +40,7 @@ const navGroups = computed(() =>
             href: item.href,
             icon: resolveNavIcon(item.icon),
         })),
-    })).length > 1
-        ? page.props.navGroups.map((group) => ({
-              group: group.group,
-              items: group.items.map((item): NavItem => ({
-                  title: item.label,
-                  href: item.href,
-                  icon: resolveNavIcon(item.icon),
-              })),
-          }))
-        : [
-              {
-                  group: 'მოდულები',
-                  items: [
-                      { title: 'პროექტები', href: '/projects', icon: resolveNavIcon('layout-grid') },
-                      { title: 'მოწყობილობები', href: '/devices', icon: resolveNavIcon('cpu') },
-                      { title: 'თანამშრომლები', href: '/employees', icon: resolveNavIcon('users') },
-                      { title: 'კომპანიები', href: '/companies', icon: resolveNavIcon('building-2') },
-                  ],
-              },
-              ...page.props.navGroups.map((group) => ({
-                  group: group.group,
-                  items: group.items.map((item): NavItem => ({
-                      title: item.label,
-                      href: item.href,
-                      icon: resolveNavIcon(item.icon),
-                  })),
-              })),
-          ],
+    })),
 );
 </script>
 

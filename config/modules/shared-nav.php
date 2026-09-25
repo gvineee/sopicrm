@@ -12,7 +12,7 @@
  * component to add an entry — only this kind of file.
  *
  * `group` must be one of the section-4 desktop menu groups (მიმოხილვა/
- * პროექტები/დავალებები/თანამშრომლები/დასწრება/ანაზღაურება/ხელსაწყოები/
+ * ჩემი სამუშაო/პროექტები/დავალებები/თანამშრომლები/დასწრება/ანაზღაურება/ხელსაწყოები/
  * საწყობი/შესყიდვები/ფინანსები/კლიენტები/ხარისხი და უსაფრთხოება/
  * დოკუმენტები/ანგარიშები/პარამეტრები). `permission` is a spatie permission
  * name (string), a list of permission names (any-of), or null for "every
@@ -27,6 +27,17 @@ return [
                 'label' => 'დეშბორდი',
                 'icon' => 'layout-grid',
                 'route' => 'dashboard',
+                'permission' => null,
+            ],
+        ],
+    ],
+    [
+        'group' => 'ჩემი სამუშაო',
+        'items' => [
+            [
+                'label' => 'ჩემი დღე',
+                'icon' => 'calendar-check',
+                'route' => 'my-day',
                 'permission' => null,
             ],
             [

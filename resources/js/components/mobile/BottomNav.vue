@@ -6,12 +6,43 @@
  * every touch target is at least 44px (spec 4: "მინიმუმ 44px შეხების
  * არე") — each item is `min-h-11` (44px) with generous horizontal padding.
  */
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { MOBILE_BOTTOM_NAV_SLOTS } from '@/lib/mobileNav';
+import { resolveNavIcon } from '@/lib/navIcons';
 import { cn } from '@/lib/utils';
 
 const { isCurrentUrl } = useCurrentUrl();
+const page = usePage();
+
+const navItems = computed(() => {
+    const authorizedItems = page.props.navGroups.flatMap((group) => group.items);
+    const destinations: Record<string, string> = {
+        projects: '/projects',
+        timesheets: '/timesheets',
+        assets: '/assets',
+    };
+
+    return MOBILE_BOTTOM_NAV_SLOTS.flatMap((slot) => {
+        if (slot.key === 'my-day') {
+            return [{ ...slot, href: '/my-day', icon: slot.icon }];
+        }
+
+        if (slot.key === 'profile') {
+            return [{ ...slot, href: '/settings/profile', icon: slot.icon }];
+        }
+
+        const authorizedItem = authorizedItems.find((item) => {
+            const pathname = new URL(item.href, 'http://crm.local').pathname.replace(/\/$/, '');
+            return pathname === destinations[slot.key];
+        });
+
+        return authorizedItem
+            ? [{ ...slot, href: authorizedItem.href, icon: resolveNavIcon(authorizedItem.icon) }]
+            : [];
+    });
+});
 </script>
 
 <template>
@@ -19,16 +50,14 @@ const { isCurrentUrl } = useCurrentUrl();
         aria-label="მთავარი ნავიგაცია"
         class="pb-safe border-sidebar-border bg-sidebar fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
     >
-        <ul class="grid grid-cols-5">
+        <ul class="grid" :style="{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }">
             <li
-                v-for="slot in MOBILE_BOTTOM_NAV_SLOTS"
+                v-for="slot in navItems"
                 :key="slot.key"
                 class="min-w-0"
             >
-                <component
-                    :is="slot.href ? Link : 'button'"
-                    :href="slot.href ?? undefined"
-                    :disabled="!slot.href"
+                <Link
+                    :href="slot.href"
                     :aria-current="
                         slot.href && isCurrentUrl(slot.href)
                             ? 'page'
@@ -40,7 +69,6 @@ const { isCurrentUrl } = useCurrentUrl();
                             slot.href && isCurrentUrl(slot.href)
                                 ? 'text-sidebar-primary'
                                 : 'text-sidebar-foreground/70',
-                            !slot.href && 'cursor-not-allowed opacity-40',
                         )
                     "
                 >
@@ -62,7 +90,7 @@ const { isCurrentUrl } = useCurrentUrl();
                     <span class="block w-full min-w-0 truncate text-center">{{
                         slot.label
                     }}</span>
-                </component>
+                </Link>
             </li>
         </ul>
     </nav>

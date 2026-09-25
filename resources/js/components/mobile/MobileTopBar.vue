@@ -7,6 +7,7 @@
  */
 import { Menu } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
+import NotificationBell from '@/components/Notifications/NotificationBell.vue';
 import { dashboard } from '@/routes';
 import { Link } from '@inertiajs/vue3';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -37,5 +38,6 @@ const { setOpenMobile } = useSidebar();
         >
             {{ title }}
         </h1>
+        <NotificationBell class="ml-auto shrink-0" />
     </header>
 </template>
