@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Employees;
 
+use App\Domain\Shared\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEmployeeProjectAssignmentRequest extends FormRequest
 {
@@ -17,7 +19,14 @@ class StoreEmployeeProjectAssignmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'project_id' => ['required', 'uuid', 'exists:projects,id'],
+            // The organization predicate is not decoration: `Rule::exists`
+            // runs on the query builder, beneath Eloquent's tenant scope, so
+            // without it any project uuid at all — including another
+            // organization's — would pass validation here.
+            'project_id' => [
+                'required', 'uuid',
+                Rule::exists('projects', 'id')->where('organization_id', CurrentOrganization::id()),
+            ],
             'starts_on' => ['required', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
             'assignment_type' => ['nullable', 'string', 'max:100'],

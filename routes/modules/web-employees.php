@@ -33,6 +33,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('employees/{employee}/termination', [EmploymentController::class, 'store'])->name('employees.termination.store');
     Route::post('employees/{employee}/team-membership', [TeamMembershipController::class, 'store'])->name('employees.team-membership.store');
     Route::post('employees/{employee}/project-assignments', [EmployeeProjectAssignmentController::class, 'store'])->name('employees.project-assignments.store');
+    // Audit A10: correcting a period, and ending one. Only creation existed,
+    // so a wrong date could never be fixed and an assignment could never be
+    // closed — the only option was to leave a wrong record standing.
+    Route::put('employees/{employee}/project-assignments/{assignment}', [EmployeeProjectAssignmentController::class, 'update'])->name('employees.project-assignments.update');
     Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store');
     Route::get('employees/{employee}/documents/{attachment}', [EmployeeDocumentController::class, 'download'])->name('employees.documents.download');
     Route::post('employees/{employee}/photo', [EmployeePhotoController::class, 'store'])->name('employees.photo.store');

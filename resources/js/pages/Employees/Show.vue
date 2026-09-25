@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { employeeStatusLabel } from '@/lib/labels';
+import { employeeStatusLabel, formatDate } from '@/lib/labels';
 import { ref } from 'vue';
 import EntityPicker from '@/components/EntityPicker.vue';
 import { Button } from '@/components/ui/button';
@@ -97,6 +97,44 @@ const assignmentForm = useForm({
     ends_on: '',
     assignment_type: '',
 });
+// Audit A10: correcting or ending an assignment period. The project itself is
+// not editable — moving an assignment to a different project would silently
+// reattribute every already-worked day in that period, so transferring someone
+// means ending this assignment and starting another.
+const editingAssignmentId = ref<string | null>(null);
+const assignmentEditForm = useForm({ starts_on: '', ends_on: '', assignment_type: '' });
+
+type ProjectAssignmentRow = Props['projectAssignments'][number];
+
+function startEditAssignment(assignment: ProjectAssignmentRow) {
+    editingAssignmentId.value = assignment.id;
+    assignmentEditForm.clearErrors();
+    assignmentEditForm.starts_on = assignment.starts_on;
+    assignmentEditForm.ends_on = assignment.ends_on ?? '';
+    assignmentEditForm.assignment_type = assignment.assignment_type ?? '';
+}
+
+function saveAssignment(assignmentId: string) {
+    assignmentEditForm
+        .transform((data) => ({
+            ...data,
+            ends_on: data.ends_on || null,
+            assignment_type: data.assignment_type || null,
+        }))
+        .put(`/employees/${props.employee.id}/project-assignments/${assignmentId}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                editingAssignmentId.value = null;
+            },
+        });
+}
+
+function endAssignmentToday(assignment: ProjectAssignmentRow) {
+    startEditAssignment(assignment);
+    assignmentEditForm.ends_on = new Date().toISOString().slice(0, 10);
+    saveAssignment(assignment.id);
+}
+
 const terminationForm = useForm({
     ended_on: new Date().toISOString().slice(0, 10),
     end_reason: '',
@@ -385,9 +423,50 @@ function uploadPhoto(event: Event) {
                         {{ assignment.project_name || 'პროექტი' }}
                     </p>
                     <p class="text-muted-foreground">
-                        {{ assignment.starts_on }} —
-                        {{ assignment.ends_on || 'დღემდე' }}
+                        {{ formatDate(assignment.starts_on) }} —
+                        {{ assignment.ends_on ? formatDate(assignment.ends_on) : 'დღემდე' }}
+                        <template v-if="assignment.assignment_type"> · {{ assignment.assignment_type }}</template>
                     </p>
+
+                    <!-- Audit A10: the period was read-only, so a wrong date
+                         could never be corrected and an assignment could never
+                         be closed. This is not cosmetic — the period decides
+                         which project a worked day is attributed to. -->
+                    <template v-if="canEdit">
+                        <form
+                            v-if="editingAssignmentId === assignment.id"
+                            class="mt-3 grid gap-2"
+                            @submit.prevent="saveAssignment(assignment.id)"
+                        >
+                            <div class="grid gap-2 sm:grid-cols-2">
+                                <div class="grid gap-1">
+                                    <Label class="text-xs">დაწყება</Label>
+                                    <Input v-model="assignmentEditForm.starts_on" type="date" required />
+                                </div>
+                                <div class="grid gap-1">
+                                    <Label class="text-xs">დასრულება</Label>
+                                    <Input v-model="assignmentEditForm.ends_on" type="date" />
+                                </div>
+                            </div>
+                            <p v-if="assignmentEditForm.errors.ends_on" class="text-destructive text-xs">
+                                {{ assignmentEditForm.errors.ends_on }}
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <Button type="submit" size="sm" :disabled="assignmentEditForm.processing">შენახვა</Button>
+                                <Button type="button" size="sm" variant="ghost" @click="editingAssignmentId = null">გაუქმება</Button>
+                            </div>
+                        </form>
+                        <div v-else class="mt-2 flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" @click="startEditAssignment(assignment)">რედაქტირება</Button>
+                            <Button
+                                v-if="!assignment.ends_on"
+                                size="sm"
+                                variant="ghost"
+                                @click="endAssignmentToday(assignment)"
+                                >დღეს დასრულება</Button
+                            >
+                        </div>
+                    </template>
                 </div>
             </div>
             <p v-else class="text-muted-foreground mt-3 text-sm">
