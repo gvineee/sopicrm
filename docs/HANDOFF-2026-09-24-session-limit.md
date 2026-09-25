@@ -1,3 +1,6 @@
+> **Superseded by `docs/STATE.md`.** Kept for the detail it records about
+> the 2026-09-24/25 pass; start from STATE.md instead.
+
 # HANDOFF — state as of 2026-09-25
 
 Everything below is committed and pushed to `origin/main` unless it says
