@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { READER_ROLE_OPTIONS } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +31,8 @@ const form = useForm({
     timezone: 'Asia/Tbilisi',
     enabled: true,
 });
+
+const readerRoleHint = computed(() => READER_ROLE_OPTIONS.find((role) => role.value === form.reader_role)?.hint ?? '');
 
 function submit() {
     form
@@ -127,17 +131,9 @@ function submit() {
                         v-model="form.reader_role"
                         class="border-input bg-background h-9 rounded-md border px-3 text-sm"
                     >
-                        <option value="in">მხოლოდ შესვლა (IN)</option>
-                        <option value="out">მხოლოდ გასვლა (OUT)</option>
-                        <option value="unspecified">
-                            ერთი reader — IN/OUT (დღის პირველი/ბოლო წაკითხვა)
-                        </option>
+                        <option v-for="role in READER_ROLE_OPTIONS" :key="role.value" :value="role.value">{{ role.label }}</option>
                     </select>
-                    <p class="text-muted-foreground text-xs">
-                        „unspecified" ნიშნავს, რომ ეს ერთი reader ორივე მიმართულებას
-                        ემსახურება — მიმართულება არასდროს გამოითვლება ყოველი მეორე
-                        წაკითხვის მონაცვლეობით.
-                    </p>
+                    <p class="text-muted-foreground text-xs">{{ readerRoleHint }}</p>
                 </div>
                 <div class="grid gap-2">
                     <Label>დროის სარტყელი</Label>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { deviceCommandTypeLabel, deviceSyncStatusLabel, formatDateTime } from '@/lib/labels';
+import { deviceCommandTypeLabel, deviceSyncStatusLabel, formatDateTime, readerDirectionLabel } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -107,7 +107,7 @@ const eventForm = useForm({
     stream_epoch: '1',
     card_type: 'EM',
     card_hex: '',
-    direction: props.device.reader_role === 'unspecified' ? 'unspecified' : props.device.reader_role,
+    direction: ['in', 'out'].includes(props.device.reader_role) ? props.device.reader_role : 'unspecified',
     event_code: 'access_granted',
 });
 
@@ -177,13 +177,7 @@ function generateEvent() {
                     <div>
                         <dt class="text-muted-foreground">Reader-ის როლი</dt>
                         <dd>
-                            {{
-                                device.reader_role === 'in'
-                                    ? 'IN'
-                                    : device.reader_role === 'out'
-                                      ? 'OUT'
-                                      : 'IN/OUT (ერთი reader)'
-                            }}
+                            {{ readerDirectionLabel(device.reader_role) }}
                         </dd>
                     </div>
                     <div>

@@ -28,6 +28,15 @@ class Device extends Model
     /** @use HasFactory<DeviceFactory> */
     use BelongsToOrganization, HasFactory, HasUuids, HasVersion;
 
+    /**
+     * `in`/`out` are the two sides of a door. `first_last` is an
+     * attendance-only reader whose day is paired earliest → latest.
+     * `access_only` opens a door and takes no part in attendance.
+     * `unspecified` means nobody has decided yet, and is reported as an
+     * `undirected_reader` anomaly until somebody does.
+     */
+    public const READER_ROLES = ['in', 'out', 'unspecified', 'first_last', 'access_only'];
+
     public $incrementing = false;
 
     protected $keyType = 'string';

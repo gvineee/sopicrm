@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { READER_ROLE_OPTIONS } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +53,8 @@ const form = useForm({
     timezone: props.device.timezone || props.device.device_timezone,
     enabled: props.device.enabled !== false,
 });
+
+const readerRoleHint = computed(() => READER_ROLE_OPTIONS.find((role) => role.value === form.reader_role)?.hint ?? '');
 
 function submit() {
     form
@@ -125,10 +129,9 @@ function submit() {
                 <div class="grid gap-2">
                     <Label>Reader-ის როლი</Label>
                     <select v-model="form.reader_role" class="border-input bg-background h-9 rounded-md border px-3 text-sm">
-                        <option value="in">შესვლა (IN)</option>
-                        <option value="out">გასვლა (OUT)</option>
-                        <option value="unspecified">განსაზღვრული არაა</option>
+                        <option v-for="role in READER_ROLE_OPTIONS" :key="role.value" :value="role.value">{{ role.label }}</option>
                     </select>
+                    <p class="text-muted-foreground text-xs">{{ readerRoleHint }}</p>
                 </div>
                 <div class="grid gap-2">
                     <Label>დროის სარტყელი</Label>

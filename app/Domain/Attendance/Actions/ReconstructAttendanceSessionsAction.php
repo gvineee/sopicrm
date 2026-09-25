@@ -109,6 +109,13 @@ class ReconstructAttendanceSessionsAction
      */
     public function handle(Employee $employee, CarbonInterface $from, CarbonInterface $to, User $actor): array
     {
+        // A `first_last` day is paired from its earliest read, so a window that
+        // starts mid-day (the incremental checkpoint, typically) would rebuild
+        // the day from whatever reads happen to fall after it and invent a
+        // second, shorter session. Every run therefore starts at the local
+        // midnight of its window's first day.
+        $from = WorkDateResolver::startDateFor($from);
+
         return DB::transaction(function () use ($employee, $from, $to, $actor) {
             $runId = (string) Str::uuid();
 
@@ -151,14 +158,18 @@ class ReconstructAttendanceSessionsAction
 
             $this->checkUndirectedReaders($employee, $from, $to);
 
-            $sessions = [];
+            $sessions = $this->reconstructFirstLastDays(
+                $employee,
+                array_values(array_filter($normalEvents, fn (RawAccessEvent $e): bool => $e->reader_direction_snapshot === 'first_last')),
+                $runId,
+            );
             $open = null;
             $previousEvent = null;
 
             foreach ($normalEvents as $event) {
                 $direction = $event->reader_direction_snapshot;
 
-                if ($direction === 'unspecified') {
+                if ($direction !== 'in' && $direction !== 'out') {
                     continue;
                 }
 
@@ -229,7 +240,13 @@ class ReconstructAttendanceSessionsAction
      */
     private function checkUndirectedReaders(Employee $employee, CarbonInterface $from, CarbonInterface $to): void
     {
-        $undirected = $this->eventsFor($employee, $from, $to, ['unspecified']);
+        // Only readers that are STILL undecided. A read taken before somebody
+        // chose the reader's role keeps its `unspecified` snapshot (history
+        // is not rewritten), but once the role is chosen there is nothing
+        // left to configure, and an anomaly asking for it would be false.
+        $undirected = $this->eventsFor($employee, $from, $to, ['unspecified'])
+            ->filter(fn (RawAccessEvent $event): bool => $event->device->reader_role === 'unspecified')
+            ->values();
 
         if ($undirected->isEmpty()) {
             return;
@@ -261,7 +278,57 @@ class ReconstructAttendanceSessionsAction
      */
     private function orderedEventsFor(Employee $employee, CarbonInterface $from, CarbonInterface $to): Collection
     {
-        return $this->eventsFor($employee, $from, $to, ['in', 'out']);
+        return $this->eventsFor($employee, $from, $to, ['in', 'out', 'first_last']);
+    }
+
+    /**
+     * The owner's rule for an attendance-only reader (`reader_role =
+     * first_last`): „დღის პირველი დაფიქსირება იქნება მოსვლა, დღის ბოლო
+     * დაფიქსირება იქნება წასვლა". Reads in between are real and stay in the
+     * raw log, but do not split the day.
+     *
+     * A day with a single read has an arrival and no departure. While that day
+     * is still running that is simply somebody at work, so the session is left
+     * open without complaint; once the day is over it is a `missing_out`, the
+     * same as an unclosed IN on a directed reader — never a guessed end time.
+     *
+     * @param  list<RawAccessEvent>  $reads  ordered by time, locked dates already removed
+     * @return list<AttendanceSession>
+     */
+    private function reconstructFirstLastDays(Employee $employee, array $reads, string $runId): array
+    {
+        $today = WorkDateResolver::startDateFor(now())->toDateString();
+        $sessions = [];
+
+        $byDay = collect($reads)->groupBy(
+            fn (RawAccessEvent $read): string => WorkDateResolver::startDateFor($read->normalized_event_time_utc)->toDateString(),
+        );
+
+        foreach ($byDay as $workDate => $dayReads) {
+            /** @var RawAccessEvent $first */
+            $first = $dayReads->first();
+            /** @var RawAccessEvent $last */
+            $last = $dayReads->last();
+
+            $this->checkLateArriving($employee, $first);
+            $session = $this->openSession($employee, $first, $runId);
+            $sessions[] = $session;
+
+            if ($last->isNot($first)) {
+                $this->checkLateArriving($employee, $last);
+                $this->closeSession($session, $last);
+
+                continue;
+            }
+
+            if ($workDate < $today) {
+                $this->flagAnomaly($employee->id, 'missing_out', $session, [
+                    'clock_in_event_id' => $session->clock_in_event_id,
+                ]);
+            }
+        }
+
+        return $sessions;
     }
 
     /**

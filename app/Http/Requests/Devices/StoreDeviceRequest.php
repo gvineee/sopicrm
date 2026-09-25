@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Devices;
 
+use App\Domain\Devices\Models\Device;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -47,7 +48,7 @@ class StoreDeviceRequest extends FormRequest
             'hardware_version' => ['nullable', 'string', 'max:50'],
             'connection_mode' => ['nullable', Rule::in(['gateway', 'tcp', 'udp', 'other'])],
             'install_location' => ['nullable', 'string', 'max:255'],
-            'reader_role' => ['nullable', Rule::in(['in', 'out', 'unspecified'])],
+            'reader_role' => ['nullable', Rule::in(Device::READER_ROLES)],
             'device_timezone' => ['nullable', 'string', 'max:64'],
             'timezone' => ['nullable', 'timezone:all'],
             'enabled' => ['nullable', 'boolean'],

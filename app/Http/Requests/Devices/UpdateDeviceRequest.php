@@ -40,7 +40,7 @@ class UpdateDeviceRequest extends FormRequest
             'hardware_version' => ['nullable', 'string', 'max:50'],
             'connection_mode' => ['nullable', Rule::in(['gateway', 'tcp', 'udp', 'other'])],
             'install_location' => ['nullable', 'string', 'max:255'],
-            'reader_role' => ['required', Rule::in(['in', 'out', 'unspecified'])],
+            'reader_role' => ['required', Rule::in(Device::READER_ROLES)],
             'device_timezone' => ['nullable', 'timezone:all'],
             'timezone' => ['nullable', 'timezone:all'],
             'enabled' => ['nullable', 'boolean'],

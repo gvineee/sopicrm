@@ -136,6 +136,8 @@ const READER_DIRECTION: Record<string, string> = {
     in: 'შესვლა',
     out: 'გასვლა',
     unspecified: 'მიუთითებელი',
+    first_last: 'აღრიცხვა (დღის პირველი/ბოლო)',
+    access_only: 'მხოლოდ დაშვება',
     entry: 'შესვლა',
     exit: 'გასვლა',
 };
@@ -177,6 +179,23 @@ const PROJECT_ROLE: Record<string, string> = {
     observer: 'დამკვირვებელი',
     client: 'კლიენტის წარმომადგენელი',
 };
+
+// Reader configuration, in the order a person setting one up should read them.
+export const READER_ROLE_OPTIONS = [
+    { value: 'in', label: 'შესვლა (IN)', hint: 'კარის შიდა მხარე: ყოველი წაკითხვა მოსვლაა.' },
+    { value: 'out', label: 'გასვლა (OUT)', hint: 'კარის გარე მხარე: ყოველი წაკითხვა წასვლაა.' },
+    {
+        value: 'first_last',
+        label: 'აღრიცხვა — დღის პირველი/ბოლო',
+        hint: 'მხოლოდ აღრიცხვისთვის: დღის პირველი წაკითხვა მოსვლაა, ბოლო — წასვლა.',
+    },
+    { value: 'access_only', label: 'მხოლოდ დაშვება', hint: 'კარს აღებს; დასწრების საათებში არ ითვლება.' },
+    {
+        value: 'unspecified',
+        label: 'განსაზღვრული არაა',
+        hint: 'საათები არ ითვლება და ჩნდება ანომალია, სანამ როლი არ აირჩევა.',
+    },
+] as const;
 
 export const PROJECT_ROLE_OPTIONS = Object.entries(PROJECT_ROLE).map(([value, label]) => ({ value, label }));
 

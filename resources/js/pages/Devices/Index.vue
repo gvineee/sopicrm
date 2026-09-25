@@ -63,7 +63,9 @@ const SYNC_LABEL: Record<string, string> = {
 const READER_ROLE_LABEL: Record<string, string> = {
     in: 'შესვლა (IN)',
     out: 'გასვლა (OUT)',
-    unspecified: 'IN/OUT (განუსაზღვრელი)',
+    unspecified: 'განსაზღვრული არაა',
+    first_last: 'აღრიცხვა (პირველი/ბოლო)',
+    access_only: 'მხოლოდ დაშვება',
 };
 </script>
 

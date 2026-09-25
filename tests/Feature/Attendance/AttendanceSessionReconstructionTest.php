@@ -551,3 +551,146 @@ test('once the readers are configured the reads pair normally and nothing new is
         ->and($sessions[0]->raw_duration_minutes)->toBe(540)
         ->and(AttendanceAnomaly::query()->where('anomaly_type', 'undirected_reader')->exists())->toBeFalse();
 });
+
+/*
+ * The owner's rule for the „აღრიცხვა" reader (2026-09-25): it exists only to
+ * record attendance — the first read of a day is the arrival, the last read is
+ * the departure. Tbilisi is UTC+4, so 05:00 UTC is 09:00 local.
+ */
+function firstLastRead(object $test, int $nativeId, Carbon $at, ?Device $device = null): RawAccessEvent
+{
+    return RawAccessEvent::factory()->create([
+        'organization_id' => $test->organization->id,
+        'device_id' => ($device ?? $test->device)->id,
+        'credential_id' => $test->credential->id,
+        'native_event_id' => $nativeId,
+        'reader_direction_snapshot' => ($device ?? $test->device)->reader_role,
+        'event_code' => 'access_granted',
+        'normalized_event_time_utc' => $at,
+        'received_at' => $at,
+    ]);
+}
+
+test('an attendance-only reader pairs the first read of the day with the last, ignoring those between', function () {
+    $this->device->update(['reader_role' => 'first_last']);
+    $day = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+
+    firstLastRead($this, 1, $day->copy()->setTime(5, 0));
+    firstLastRead($this, 2, $day->copy()->setTime(9, 0));
+    firstLastRead($this, 3, $day->copy()->setTime(10, 0));
+    firstLastRead($this, 4, $day->copy()->setTime(14, 0));
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle($this->employee, $day, $day->copy()->endOfDay(), $this->actor);
+
+    expect($sessions)->toHaveCount(1)
+        ->and($sessions[0]->fresh()->status)->toBe('closed')
+        ->and($sessions[0]->fresh()->raw_duration_minutes)->toBe(540)
+        ->and(AttendanceAnomaly::query()->count())->toBe(0);
+});
+
+test('each local day on an attendance-only reader is its own session', function () {
+    $this->device->update(['reader_role' => 'first_last']);
+    $monday = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+    $tuesday = Carbon::parse('2026-09-22 00:00:00', 'UTC');
+
+    firstLastRead($this, 1, $monday->copy()->setTime(5, 0));
+    firstLastRead($this, 2, $monday->copy()->setTime(13, 0));
+    firstLastRead($this, 3, $tuesday->copy()->setTime(6, 0));
+    firstLastRead($this, 4, $tuesday->copy()->setTime(14, 0));
+
+    app(ReconstructAttendanceSessionsAction::class)->handle($this->employee, $monday, $tuesday->copy()->endOfDay(), $this->actor);
+
+    $sessions = AttendanceSession::query()->where('status', 'closed')->orderBy('clock_in_at')->get();
+
+    expect($sessions)->toHaveCount(2)
+        ->and($sessions->pluck('raw_duration_minutes')->all())->toBe([480, 480]);
+});
+
+test('a lone read is an open day while the day runs, and a missing exit once it is over', function () {
+    $this->device->update(['reader_role' => 'first_last']);
+    Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'UTC'));
+
+    firstLastRead($this, 1, Carbon::parse('2026-09-21 05:00:00', 'UTC'));
+    firstLastRead($this, 2, Carbon::parse('2026-09-22 05:00:00', 'UTC'));
+
+    app(ReconstructAttendanceSessionsAction::class)->handle(
+        $this->employee,
+        Carbon::parse('2026-09-21 00:00:00', 'UTC'),
+        now(),
+        $this->actor,
+    );
+
+    $sessions = AttendanceSession::query()->where('status', '!=', 'superseded')->orderBy('clock_in_at')->get();
+    $missing = AttendanceAnomaly::query()->where('anomaly_type', 'missing_out')->get();
+
+    expect($sessions->pluck('status')->all())->toBe(['open', 'open'])
+        ->and($missing)->toHaveCount(1)
+        ->and($missing[0]->attendance_session_id)->toBe($sessions[0]->id);
+
+    Carbon::setTestNow();
+});
+
+test('a window starting mid-day still pairs from the day\'s first read, and a rerun does not duplicate it', function () {
+    $this->device->update(['reader_role' => 'first_last']);
+    $day = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+
+    firstLastRead($this, 1, $day->copy()->setTime(5, 0));
+    firstLastRead($this, 2, $day->copy()->setTime(11, 0));
+    firstLastRead($this, 3, $day->copy()->setTime(14, 0));
+
+    // What the incremental job does: its checkpoint sits after the arrival.
+    $reconstruct = app(ReconstructAttendanceSessionsAction::class);
+    $reconstruct->handle($this->employee, $day->copy()->setTime(10, 0), $day->copy()->endOfDay(), $this->actor);
+    $reconstruct->handle($this->employee, $day->copy()->setTime(12, 0), $day->copy()->endOfDay(), $this->actor);
+
+    $live = AttendanceSession::query()->where('status', '!=', 'superseded')->get();
+
+    expect($live)->toHaveCount(1)
+        ->and($live[0]->raw_duration_minutes)->toBe(540);
+});
+
+test('an access-only reader takes no part in attendance and raises nothing', function () {
+    $this->device->update(['reader_role' => 'access_only']);
+    $day = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+
+    firstLastRead($this, 1, $day->copy()->setTime(5, 0));
+    firstLastRead($this, 2, $day->copy()->setTime(14, 0));
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle($this->employee, $day, $day->copy()->endOfDay(), $this->actor);
+
+    expect($sessions)->toBe([])
+        ->and(AttendanceAnomaly::query()->count())->toBe(0);
+});
+
+test('gate reads on an access-only reader do not disturb the attendance reader\'s day', function () {
+    $this->device->update(['reader_role' => 'access_only']);
+    $attendance = Device::factory()->create([
+        'organization_id' => $this->organization->id,
+        'site_id' => $this->site->id,
+        'reader_role' => 'first_last',
+    ]);
+    $day = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+
+    firstLastRead($this, 1, $day->copy()->setTime(4, 50));
+    firstLastRead($this, 2, $day->copy()->setTime(5, 0), $attendance);
+    firstLastRead($this, 3, $day->copy()->setTime(14, 0), $attendance);
+    firstLastRead($this, 4, $day->copy()->setTime(14, 10));
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle($this->employee, $day, $day->copy()->endOfDay(), $this->actor);
+
+    expect($sessions)->toHaveCount(1)
+        ->and($sessions[0]->fresh()->raw_duration_minutes)->toBe(540);
+});
+
+test('reads taken before a reader was configured are not reported once it has been', function () {
+    $day = Carbon::parse('2026-09-21 00:00:00', 'UTC');
+    $this->device->update(['reader_role' => 'unspecified']);
+    firstLastRead($this, 1, $day->copy()->setTime(5, 0));
+
+    $this->device->update(['reader_role' => 'access_only']);
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle($this->employee, $day, $day->copy()->endOfDay(), $this->actor);
+
+    expect($sessions)->toBe([])
+        ->and(AttendanceAnomaly::query()->where('anomaly_type', 'undirected_reader')->exists())->toBeFalse();
+});
