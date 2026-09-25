@@ -10,6 +10,7 @@ use App\Domain\Projects\Exceptions\ProjectDomainException;
 use App\Domain\Projects\Models\Client;
 use App\Domain\Projects\Models\Project;
 use App\Domain\Projects\Models\ProjectLocation;
+use App\Domain\Projects\Services\ProjectActivityFeed;
 use App\Domain\Projects\Services\ProjectStatusTransitionService;
 use App\Domain\Shared\Services\AuditLogger;
 use App\Domain\Shared\Services\PortableSearch;
@@ -174,6 +175,14 @@ class ProjectController extends Controller
                     ->where('due_at', '<', now())
                     ->count(),
             ],
+            // Audit A06: the change history behind the „აქტივობა" tab.
+            // `optional` so it is not queried on every project page load —
+            // the tab asks for it when it is opened, via a partial reload.
+            'activity' => Inertia::optional(
+                fn () => $request->user()->can('viewActivity', $project)
+                    ? app(ProjectActivityFeed::class)->for($project, $request->user())
+                    : []
+            ),
             'can' => [
                 'manage_memberships' => $canManageMemberships,
                 'manage_wbs' => $canManageWbs,

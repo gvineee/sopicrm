@@ -170,6 +170,24 @@ class ProjectPolicy
      * (they never hold `projects.budget.view`) — spec: "თვითღირებულება და
      * ხელფასები დამალულია" for that role.
      */
+    /**
+     * Audit A06: the project's change history. Deliberately the same
+     * authority as opening the project itself, not the org-wide
+     * `audit.events.view` permission — that one is held only by `owner` and
+     * `system_admin`, so reusing it verbatim would leave the tab empty for
+     * every project manager, which is precisely the person the audit item is
+     * about.
+     *
+     * This is not a widening of audit access: the feed is confined to one
+     * project and its own children, and fields the viewer is not cleared for
+     * (the budget) are redacted on the way out — see
+     * App\Domain\Projects\Services\ProjectActivityFeed.
+     */
+    public function viewActivity(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
     public function viewBudget(User $user, Project $project): bool
     {
         if (! $this->view($user, $project)) {

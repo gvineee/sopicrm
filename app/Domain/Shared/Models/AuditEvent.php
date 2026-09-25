@@ -4,6 +4,7 @@ namespace App\Domain\Shared\Models;
 
 use App\Domain\Shared\Concerns\BelongsToOrganization;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Factories\AuditEventFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,6 +23,17 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * `HasFactory`/`AuditEventFactory` added by the P0+P1 schema pass purely for
  * test-setup convenience — production code must still only ever create rows
  * via AuditLogger, never `AuditEvent::factory()->create()` outside tests.
+ *
+ * The properties below are declared because the casts change their types away
+ * from the raw columns: `before`/`after` are json columns read as arrays, and
+ * `created_at` is a Carbon instance. Without the declarations a reader looks
+ * like it is indexing a string. `actor` is genuinely nullable — a row written
+ * by the system, or one whose user has since been removed, has none.
+ *
+ * @property array<string, mixed>|null $before
+ * @property array<string, mixed>|null $after
+ * @property Carbon|null $created_at
+ * @property-read User|null $actor
  */
 class AuditEvent extends Model
 {

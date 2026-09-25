@@ -56,6 +56,9 @@ class ProjectDetailResource extends JsonResource
                 'manage_wbs' => $user->can('manageWbs', $this->resource),
                 'manage_documents' => $user->can('manageDocuments', $this->resource),
                 'view_budget' => $user->can('viewBudget', $this->resource),
+                // Audit A06: whether the „აქტივობა" tab should ask the server
+                // for this project's change history at all.
+                'view_activity' => $user->can('viewActivity', $this->resource),
             ],
         ];
     }

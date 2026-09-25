@@ -55,6 +55,7 @@ type ProjectDetail = {
         manage_memberships: boolean;
         manage_wbs: boolean;
         manage_documents: boolean;
+        view_activity: boolean;
         view_budget: boolean;
     };
 };
@@ -62,6 +63,18 @@ type ProjectDetail = {
 type TaskStats = {
     by_status: Record<string, number>;
     overdue: number;
+};
+
+type ActivityEntry = {
+    id: string;
+    action: string;
+    target_type: string;
+    target_id: string;
+    reason?: string | null;
+    occurred_at?: string | null;
+    actor_name?: string | null;
+    before?: Record<string, unknown> | null;
+    after?: Record<string, unknown> | null;
 };
 
 const props = defineProps<{
@@ -72,6 +85,10 @@ const props = defineProps<{
     locations: LocationRow[];
     documents: DocumentRow[];
     taskStats: TaskStats;
+    // Audit A06: loaded lazily — the server sends it only when this tab asks
+    // for it, so an ordinary project page load does not pay for a history
+    // nobody opened.
+    activity?: ActivityEntry[];
 }>();
 
 defineOptions({ layout: { mobileTitle: 'პროექტი' } });
@@ -112,6 +129,67 @@ const TABS: Array<{ key: TabKey; label: string }> = [
     { key: 'activity', label: 'აქტივობა' },
 ];
 const activeTab = ref<TabKey>('overview');
+
+// Audit A06: the history was never fetched because it was never implemented.
+// It is an optional prop now, so opening the tab is what asks for it.
+const activityLoading = ref(false);
+
+function selectTab(key: TabKey) {
+    activeTab.value = key;
+
+    if (key === 'activity' && props.activity === undefined && props.project.can.view_activity) {
+        activityLoading.value = true;
+        router.reload({
+            only: ['activity'],
+            onFinish: () => {
+                activityLoading.value = false;
+            },
+        });
+    }
+}
+
+const ACTIVITY_LABEL: Record<string, string> = {
+    'projects.project.created': 'პროექტი შეიქმნა',
+    'projects.project.updated': 'პროექტი შეიცვალა',
+    'projects.project.status_changed': 'სტატუსი შეიცვალა',
+    'projects.project.deleted': 'პროექტი წაიშალა',
+    'projects.membership.added': 'წევრი დაემატა',
+    'projects.membership.removed': 'წევრი მოიხსნა',
+    'projects.document.uploaded': 'დოკუმენტი აიტვირთა',
+    'projects.document.deleted': 'დოკუმენტი წაიშალა',
+    'projects.wbs.location_created': 'ლოკაცია შეიქმნა',
+    'projects.wbs.location_updated': 'ლოკაცია შეიცვალა',
+    'projects.wbs.location_deleted': 'ლოკაცია წაიშალა',
+    'projects.wbs.work_package_created': 'სამუშაო პაკეტი შეიქმნა',
+    'projects.wbs.work_package_updated': 'სამუშაო პაკეტი შეიცვალა',
+    'projects.wbs.work_package_deleted': 'სამუშაო პაკეტი წაიშალა',
+};
+
+/**
+ * Only the fields that actually differ, so a rename does not present itself
+ * as a change to every column the record happens to have.
+ */
+function changedFields(entry: ActivityEntry): Array<{ field: string; before: string; after: string }> {
+    const before = entry.before ?? {};
+    const after = entry.after ?? {};
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+
+    return keys
+        .map((field) => ({
+            field,
+            before: formatValue(before[field]),
+            after: formatValue(after[field]),
+        }))
+        .filter((row) => row.before !== row.after);
+}
+
+function formatValue(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '—';
+    if (typeof value === 'boolean') return value ? 'კი' : 'არა';
+    if (typeof value === 'object') return JSON.stringify(value);
+
+    return String(value);
+}
 
 const totalTasks = Object.values(props.taskStats.by_status).reduce((sum, count) => sum + count, 0);
 const completedTasks = props.taskStats.by_status.completed ?? 0;
@@ -183,7 +261,7 @@ function formatBytes(bytes: number): string {
                 type="button"
                 class="shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors"
                 :class="activeTab === tab.key ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent hover:text-foreground'"
-                @click="activeTab = tab.key"
+                @click="selectTab(tab.key)"
             >
                 {{ tab.label }}
                 <span v-if="tab.key === 'tasks' && taskStats.overdue > 0" class="bg-destructive/15 text-destructive ml-1 rounded-full px-1.5 py-0.5 text-xs">
@@ -328,9 +406,51 @@ function formatBytes(bytes: number): string {
             </form>
         </div>
 
+        <!-- Audit A06: this used to state outright that a project activity
+             journal was not implemented. The write side had been recording
+             actor, time and before/after all along; nothing read it. -->
         <div v-else-if="activeTab === 'activity'" class="border-border bg-card rounded-xl border p-5">
             <h2 class="font-semibold">აქტივობა</h2>
-            <EmptyState class="mt-3" title="აქტივობის ისტორია ჯერ არ არის ხელმისაწვდომი" description="პროექტის დონეზე აქტივობის ჟურნალი ჯერ არ არის დანერგილი." />
+
+            <EmptyState
+                v-if="!project.can.view_activity"
+                class="mt-3"
+                title="ისტორიის ნახვის უფლება არ გაქვთ"
+                description="პროექტის ცვლილებების ჟურნალი ხელმისაწვდომია პროექტის წევრებისთვის."
+            />
+            <p v-else-if="activityLoading" class="text-muted-foreground mt-3 text-sm">იტვირთება…</p>
+            <EmptyState
+                v-else-if="(activity ?? []).length === 0"
+                class="mt-3"
+                title="ცვლილება ჯერ არ დაფიქსირებულა"
+                description="აქ გამოჩნდება ვინ, როდის და რა შეცვალა ამ პროექტში."
+            />
+            <ol v-else class="divide-border mt-3 divide-y">
+                <li v-for="entry in activity" :key="entry.id" class="py-3">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <p class="text-sm font-medium">{{ ACTIVITY_LABEL[entry.action] ?? entry.action }}</p>
+                        <p class="text-muted-foreground text-xs">
+                            {{ entry.occurred_at ? new Date(entry.occurred_at).toLocaleString('ka-GE') : '—' }}
+                        </p>
+                    </div>
+                    <p class="text-muted-foreground text-xs">
+                        {{ entry.actor_name || 'ავტორი უცნობია' }}
+                        <span v-if="entry.reason"> · {{ entry.reason }}</span>
+                    </p>
+                    <!-- Only the fields that actually differ, so a rename does
+                         not present itself as a change to every column. -->
+                    <dl v-if="changedFields(entry).length" class="mt-2 grid gap-1 text-xs">
+                        <div v-for="change in changedFields(entry)" :key="change.field" class="flex flex-wrap gap-2">
+                            <dt class="text-muted-foreground min-w-40">{{ change.field }}</dt>
+                            <dd>
+                                <span class="text-muted-foreground line-through">{{ change.before }}</span>
+                                <span class="mx-1">→</span>
+                                <span>{{ change.after }}</span>
+                            </dd>
+                        </div>
+                    </dl>
+                </li>
+            </ol>
         </div>
     </div>
 </template>
