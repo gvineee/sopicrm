@@ -40,11 +40,18 @@ use Illuminate\Support\Str;
  * static helper — importing it here does not create a reverse dependency on
  * any Timesheets business logic.
  *
- * Anomaly detection covers the five anomaly types that only make sense at
- * reconstruction time (duplicate_in, unknown_out, missing_out,
- * excessive_duration, impossible_site_crossing, late_arriving_data);
+ * Anomaly detection covers the types that only make sense at reconstruction
+ * time (duplicate_in, unknown_out, missing_out, excessive_duration,
+ * impossible_site_crossing, late_arriving_data, undirected_reader);
  * out_of_order_events, data_gap and clock_drift are detected earlier, at
  * ingestion time, by App\Domain\Devices\Actions\IngestRawAccessEventAction.
+ *
+ * `undirected_reader` is the one that explains an ABSENCE. A reader whose
+ * `reader_role` is `unspecified` cannot open or close a session, because a
+ * guessed direction is invented hours — but staying silent about it left an
+ * employee with twenty-one real badge reads showing an empty attendance
+ * record and no way to find out why. The absence now says what is missing and
+ * which devices need configuring.
  *
  * `flagAnomaly()` deduplicates against any existing *unresolved* anomaly of
  * the same type for the same underlying trigger (the session, for
@@ -68,14 +75,10 @@ use Illuminate\Support\Str;
  *  - A denied swipe (`event_code === 'access_denied'`) is now excluded
  *    before it ever reaches the state machine — previously any event with a
  *    real `reader_direction_snapshot` opened/closed a session regardless of
- *    whether the door actually granted access. The real Suprema adapter does
- *    not yet normalize BioStar's own event-code taxonomy into
- *    granted/denied (`services/device-connector/src/adapters/suprema-device-gateway.js`
- *    still emits `biostar:<raw code>` unmapped — that normalization is
- *    BIO-04's job); this filter catches the simulator's already-normalized
- *    `access_denied` code today and will keep working once BIO-04 maps real
- *    BioStar codes onto the same convention, with no further change needed
- *    here.
+ *    whether the door actually granted access, so somebody turned away at the
+ *    gate could be paid for the day. Both producers normalize onto that one
+ *    string: the simulator by its own convention, and the real BioStar read
+ *    path through `App\Domain\Devices\Support\BiostarEventTaxonomy`.
  *  - Events were previously selected once per (employee, range) by finding
  *    every credential ever assigned to that employee whose validity window
  *    overlapped the range AT ALL, then pulling every one of that
@@ -146,6 +149,8 @@ class ReconstructAttendanceSessionsAction
                 )
                 ->update(['status' => 'superseded']);
 
+            $this->checkUndirectedReaders($employee, $from, $to);
+
             $sessions = [];
             $open = null;
             $previousEvent = null;
@@ -202,16 +207,68 @@ class ReconstructAttendanceSessionsAction
     }
 
     /**
-     * Simulator-produced denial code (`App\Domain\Devices\Adapters\SimulatorDeviceAdapter`'s
-     * own default-argument convention). The real Suprema adapter doesn't
-     * normalize onto this yet — see this class's docblock.
+     * A badge the door REFUSED. Both producers normalize onto this one string:
+     * the simulator by its own convention, and the real BioStar read path
+     * through `App\Domain\Devices\Support\BiostarEventTaxonomy`, which maps the
+     * live server's numeric families (VERIFY_FAIL_*, ACCESS_DENIED_* and the
+     * rest) onto it. Anything else would sail past this filter and a refused
+     * read would be counted as an arrival.
      */
     private const DENIED_EVENT_CODES = ['access_denied'];
+
+    /**
+     * A badge read the CRM cannot turn into a worked interval, because nobody
+     * has said which side of the door the reader is on.
+     *
+     * Reconstruction has always skipped these, and must: a session built from
+     * a guessed direction is somebody's invented hours. What it did not do was
+     * SAY so — an employee with twenty-one real reads on the live install had
+     * a completely empty attendance record and no explanation anywhere. One
+     * unresolved anomaly per employee names the readers to configure, and
+     * clears itself from the next reconstruction once they are.
+     */
+    private function checkUndirectedReaders(Employee $employee, CarbonInterface $from, CarbonInterface $to): void
+    {
+        $undirected = $this->eventsFor($employee, $from, $to, ['unspecified']);
+
+        if ($undirected->isEmpty()) {
+            return;
+        }
+
+        $devices = $undirected
+            ->map(fn (RawAccessEvent $event): array => [
+                'device_id' => $event->device_id,
+                'serial_number' => $event->device->serial_number,
+                'name' => $event->device->name,
+            ])
+            ->unique('device_id')
+            ->values()
+            ->all();
+
+        $this->flagAnomaly($employee->id, 'undirected_reader', null, [
+            // The specific event is what `flagAnomaly` dedupes on when there
+            // is no session, so the oldest one is used deliberately: it keeps
+            // the anomaly attached to the same trigger across reruns instead
+            // of opening a fresh row every time a newer swipe arrives.
+            'raw_access_event_id' => $undirected->first()->id,
+            'event_count' => $undirected->count(),
+            'devices' => $devices,
+        ]);
+    }
 
     /**
      * @return Collection<int, RawAccessEvent>
      */
     private function orderedEventsFor(Employee $employee, CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return $this->eventsFor($employee, $from, $to, ['in', 'out']);
+    }
+
+    /**
+     * @param  list<string>  $directions
+     * @return Collection<int, RawAccessEvent>
+     */
+    private function eventsFor(Employee $employee, CarbonInterface $from, CarbonInterface $to, array $directions): Collection
     {
         $credentialIds = CredentialAssignment::query()
             ->where('employee_id', $employee->id)
@@ -257,7 +314,7 @@ class ReconstructAttendanceSessionsAction
                 }
             })
             ->whereBetween('normalized_event_time_utc', [$from, $to])
-            ->whereIn('reader_direction_snapshot', ['in', 'out'])
+            ->whereIn('reader_direction_snapshot', $directions)
             ->whereNotIn('event_code', self::DENIED_EVENT_CODES)
             ->with('device')
             ->orderBy('normalized_event_time_utc')
@@ -450,9 +507,9 @@ class ReconstructAttendanceSessionsAction
      * dedupe on (employee, type, session) — a session is itself the stable,
      * versioned artifact reconstruction never duplicates, so at most one
      * unresolved anomaly of a given type ever needs to exist per session.
-     * The two device-level types with no session dedupe on the specific
-     * `raw_access_event_id` that triggered them instead, since that's the
-     * only stable identity available.
+     * The types with no session (`unknown_out`, `late_arriving_data`,
+     * `undirected_reader`) dedupe on the specific `raw_access_event_id` that
+     * triggered them instead, since that's the only stable identity available.
      *
      * @param  array<string, mixed>  $details
      */

@@ -33,20 +33,62 @@ class BiostarImportEvents extends Command
         {--organization= : ორგანიზაციის UUID}
         {--since= : საიდან (მაგ. 2026-09-01 ან -7 days). ნაგულისხმევად ბოლო 7 დღე}
         {--limit=500 : მაქსიმუმ რამდენი ჩანაწერი}
+        {--quiet-table : ცალკეული ჩანაწერების ცხრილის გარეშე (ავტომატური გაშვებისთვის)}
         {--apply : ცვლილების რეალურად შესრულება (ნაგულისხმევად მხოლოდ ნაჩვენებია)}';
 
     protected $description = 'BioStar-ის ჟურნალიდან რეალური გატარებების ჩამოტანა (მხოლოდ კითხულობს BioStar-იდან).';
 
     public function handle(BiostarReadClient $biostar, IngestRawAccessEventAction $ingest): int
     {
-        $organization = Organization::query()->find((string) $this->option('organization'));
+        $organization = $this->resolveOrganization();
 
         if ($organization === null) {
-            $this->error('მიუთითეთ არსებული --organization=<uuid>.');
-
             return self::FAILURE;
         }
 
+        return $this->importFor($organization, $biostar, $ingest);
+    }
+
+    /**
+     * One BioStar server serves one organization. Its readers are physical
+     * hardware at one company's gates, so this deliberately never fans out
+     * across every tenant: that would create a second copy of the same
+     * physical door per organization and attribute one company's staff
+     * movements to another.
+     */
+    private function resolveOrganization(): ?Organization
+    {
+        $id = (string) ($this->option('organization') ?: config('devices.biostar.organization_id', ''));
+
+        if ($id !== '') {
+            $organization = Organization::query()->find($id);
+
+            if ($organization === null) {
+                $this->error('ასეთი ორგანიზაცია ვერ მოიძებნა.');
+            }
+
+            return $organization;
+        }
+
+        $organizations = Organization::query()->orderBy('name')->get();
+
+        if ($organizations->count() === 1) {
+            return $organizations->first();
+        }
+
+        $this->error('მიუთითეთ --organization=<uuid> ან BIOSTAR_ORGANIZATION_ID. ხელმისაწვდომი:');
+        foreach ($organizations as $organization) {
+            $this->line("  {$organization->id}  {$organization->name}");
+        }
+
+        return null;
+    }
+
+    private function importFor(
+        Organization $organization,
+        BiostarReadClient $biostar,
+        IngestRawAccessEventAction $ingest,
+    ): int {
         CurrentOrganization::set($organization->id);
         if (DB::connection()->getDriverName() === 'pgsql') {
             // Console has no HTTP middleware to set the tenant GUC that
@@ -154,7 +196,9 @@ class BiostarImportEvents extends Command
             return self::SUCCESS;
         }
 
-        $this->table(['BioStar ID', 'დრო (ადგილობრივი)', 'კარი', 'BioStar user', 'ბარათი', 'ტიპი'], $table);
+        if (! $this->option('quiet-table')) {
+            $this->table(['BioStar ID', 'დრო (ადგილობრივი)', 'კარი', 'BioStar user', 'ბარათი', 'ტიპი'], $table);
+        }
 
         if (! $apply) {
             $this->warn('ეს იყო მხოლოდ ჩვენება. ჩამოსატანად დაამატეთ --apply');
@@ -280,7 +324,12 @@ class BiostarImportEvents extends Command
             'reader_role' => 'unspecified',
             'device_timezone' => $timezone,
             'timezone' => $timezone,
-            'status' => 'active',
+            // `unknown`, not `online`: the CRM has never heard from this
+            // reader directly. Its events reach us through BioStar's log, and
+            // claiming a live connection we do not have would make a silent
+            // connector look healthy. App\Domain\Devices\Services\DeviceStatusResolver
+            // sets the real value once a heartbeat arrives.
+            'status' => 'unknown',
             'enabled' => true,
         ]);
     }

@@ -53,6 +53,34 @@ Schedule::command('attendance:process-incremental')->everyFiveMinutes()->without
 Schedule::command('devices:health-check')->everyFifteenMinutes()->withoutOverlapping();
 
 /**
+ * Keeps BioStar's badge reads flowing without anybody running a command by
+ * hand. The device-connector service remains the low-latency path; this is the
+ * safety net that means an install with no connector running still has today's
+ * attendance, and that a connector outage backfills itself on recovery rather
+ * than leaving a hole somebody has to notice.
+ *
+ * Both paths go through the same ingest, which deduplicates on (organization,
+ * device, native event id, stream epoch), so they cannot double-count each
+ * other. The two-day window is deliberate overlap: it re-reads yesterday every
+ * time, which costs nothing and closes the gap a restart around midnight would
+ * otherwise leave.
+ *
+ * Skipped entirely unless BioStar is configured, so an install without it does
+ * not accumulate a failing scheduled command every ten minutes. Which tenant
+ * it imports into comes from `BIOSTAR_ORGANIZATION_ID` — one BioStar server
+ * serves one organization, and the command refuses to guess when there is more
+ * than one to choose from.
+ */
+if ((string) config('devices.biostar.base_url', '') !== '') {
+    Schedule::command('biostar:import-events', [
+        '--since' => '-2 days',
+        '--limit' => 2000,
+        '--quiet-table' => true,
+        '--apply' => true,
+    ])->everyTenMinutes()->withoutOverlapping()->runInBackground();
+}
+
+/**
  * NOTIFY-01 (deferred remainder): the scheduled half of Telegram reporting
  * — App\Console\Commands\TelegramSendDigest's own docblock has the full
  * design. Once daily, offset from `notifications:notify-due-items`'s own

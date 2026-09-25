@@ -76,6 +76,7 @@ const ATTENDANCE_ANOMALY: Record<string, string> = {
     clock_drift: 'მოწყობილობის საათის გადახრა',
     out_of_order_events: 'მოვლენები არეული თანმიმდევრობით',
     data_gap: 'მონაცემის გამოტოვება',
+    undirected_reader: 'წამკითხველს მიმართულება არ აქვს მითითებული',
 };
 
 const ADJUSTMENT_STATUS: Record<string, string> = {

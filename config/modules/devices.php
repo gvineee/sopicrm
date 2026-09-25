@@ -33,6 +33,15 @@ return [
     // production is exactly the kind of failure that only shows up there.
     'biostar' => [
         'base_url' => env('BIOSTAR_BASE_URL', ''),
+
+        // Which tenant this BioStar server's people and doors belong to. One
+        // server serves one organization: its readers are physical hardware at
+        // one company's gates, so importing them into every organization would
+        // create a second copy of the same physical door — and attribute one
+        // company's staff movements to another. Left unset where a deployment
+        // has exactly one organization, which is then unambiguous.
+        'organization_id' => env('BIOSTAR_ORGANIZATION_ID'),
+
         'username' => env('BIOSTAR_USERNAME', ''),
         'password' => env('BIOSTAR_PASSWORD', ''),
         'request_timeout_ms' => (int) env('BIOSTAR_REQUEST_TIMEOUT_MS', 15000),

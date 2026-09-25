@@ -437,3 +437,117 @@ test('ATT-01: rerunning reconstruction over the same unresolved problem never du
 
     expect(AttendanceAnomaly::query()->where('anomaly_type', 'unknown_out')->count())->toBe(1);
 });
+
+test('badge reads from a reader with no direction produce no session, and say so', function () {
+    // The live BioStar install exactly: both doors have `exit_device: NONE`,
+    // so nobody has told the CRM which side of the door this reader is on.
+    $this->device->update(['reader_role' => 'unspecified', 'name' => 'XPass 2 544452272 შემოსასვლელი']);
+
+    $day = Carbon::parse('2026-09-20 00:00:00', 'UTC');
+
+    foreach ([9, 12, 17] as $index => $hour) {
+        RawAccessEvent::factory()->create([
+            'organization_id' => $this->organization->id,
+            'device_id' => $this->device->id,
+            'credential_id' => $this->credential->id,
+            'native_event_id' => $index + 1,
+            'reader_direction_snapshot' => 'unspecified',
+            'event_code' => 'access_granted',
+            'normalized_event_time_utc' => $day->copy()->setTime($hour, 0),
+            'received_at' => $day->copy()->setTime($hour, 0),
+        ]);
+    }
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle(
+        $this->employee,
+        $day->copy()->startOfDay(),
+        $day->copy()->endOfDay(),
+        $this->actor,
+    );
+
+    // No hours are invented from a guessed direction — that part was always
+    // right.
+    expect($sessions)->toBeEmpty();
+
+    // What was missing: anything at all telling the operator why an employee
+    // with three real badge reads has an empty day.
+    $anomaly = AttendanceAnomaly::query()
+        ->where('employee_id', $this->employee->id)
+        ->where('anomaly_type', 'undirected_reader')
+        ->sole();
+
+    expect($anomaly->details['event_count'])->toBe(3)
+        ->and($anomaly->details['devices'])->toHaveCount(1)
+        ->and($anomaly->details['devices'][0]['serial_number'])->toBe($this->device->serial_number);
+});
+
+test('the undirected-reader anomaly is raised once, not once per swipe or per rerun', function () {
+    $this->device->update(['reader_role' => 'unspecified']);
+    $day = Carbon::parse('2026-09-20 00:00:00', 'UTC');
+
+    foreach (range(1, 4) as $index) {
+        RawAccessEvent::factory()->create([
+            'organization_id' => $this->organization->id,
+            'device_id' => $this->device->id,
+            'credential_id' => $this->credential->id,
+            'native_event_id' => $index,
+            'reader_direction_snapshot' => 'unspecified',
+            'event_code' => 'access_granted',
+            'normalized_event_time_utc' => $day->copy()->setTime(8 + $index, 0),
+            'received_at' => $day->copy()->setTime(8 + $index, 0),
+        ]);
+    }
+
+    $reconstruct = app(ReconstructAttendanceSessionsAction::class);
+    $reconstruct->handle($this->employee, $day->copy()->startOfDay(), $day->copy()->endOfDay(), $this->actor);
+    $reconstruct->handle($this->employee, $day->copy()->startOfDay(), $day->copy()->endOfDay(), $this->actor);
+
+    expect(AttendanceAnomaly::query()->where('anomaly_type', 'undirected_reader')->count())->toBe(1);
+});
+
+test('once the readers are configured the reads pair normally and nothing new is flagged', function () {
+    $exit = Device::factory()->create([
+        'organization_id' => $this->organization->id,
+        'site_id' => $this->site->id,
+        'reader_role' => 'out',
+    ]);
+    $this->device->update(['reader_role' => 'in']);
+
+    $day = Carbon::parse('2026-09-20 00:00:00', 'UTC');
+
+    RawAccessEvent::factory()->create([
+        'organization_id' => $this->organization->id,
+        'device_id' => $this->device->id,
+        'credential_id' => $this->credential->id,
+        'native_event_id' => 1,
+        'reader_direction_snapshot' => 'in',
+        'event_code' => 'access_granted',
+        'normalized_event_time_utc' => $day->copy()->setTime(9, 0),
+        'received_at' => $day->copy()->setTime(9, 0),
+    ]);
+    RawAccessEvent::factory()->create([
+        'organization_id' => $this->organization->id,
+        'device_id' => $exit->id,
+        'credential_id' => $this->credential->id,
+        'native_event_id' => 2,
+        'reader_direction_snapshot' => 'out',
+        'event_code' => 'access_granted',
+        'normalized_event_time_utc' => $day->copy()->setTime(18, 0),
+        'received_at' => $day->copy()->setTime(18, 0),
+    ]);
+
+    $sessions = app(ReconstructAttendanceSessionsAction::class)->handle(
+        $this->employee,
+        $day->copy()->startOfDay(),
+        $day->copy()->endOfDay(),
+        $this->actor,
+    );
+
+    // The companion to the two tests above: the anomaly proves an absence, so
+    // this proves the mechanism it stands in for still works once the missing
+    // configuration is supplied.
+    expect($sessions)->toHaveCount(1)
+        ->and($sessions[0]->status)->toBe('closed')
+        ->and($sessions[0]->raw_duration_minutes)->toBe(540)
+        ->and(AttendanceAnomaly::query()->where('anomaly_type', 'undirected_reader')->exists())->toBeFalse();
+});
