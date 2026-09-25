@@ -172,6 +172,19 @@ const ACTIVITY_LABEL: Record<string, string> = {
     'projects.wbs.work_package_created': 'სამუშაო პაკეტი შეიქმნა',
     'projects.wbs.work_package_updated': 'სამუშაო პაკეტი შეიცვალა',
     'projects.wbs.work_package_deleted': 'სამუშაო პაკეტი წაიშალა',
+    // DV-01: the Tasks domain now writes audit events too, and a task belongs
+    // to exactly one project, so its history shows up in this feed.
+    'tasks.task.created': 'დავალება შეიქმნა',
+    'tasks.task.updated': 'დავალება შეიცვალა',
+    'tasks.task.assigned': 'დავალება გაიცა',
+    'tasks.task.in_progress': 'დავალება დაიწყო',
+    'tasks.task.blocked': 'დავალება დაიბლოკა',
+    'tasks.task.submitted': 'დავალება გაიგზავნა მისაღებად',
+    'tasks.task.completed': 'დავალება დასრულდა',
+    'tasks.task.cancelled': 'დავალება გაუქმდა',
+    'tasks.dependency.added': 'დამოკიდებულება დაემატა',
+    'tasks.checklist_item.checked': 'checklist-ის პუნქტი მოინიშნა',
+    'tasks.checklist_item.unchecked': 'checklist-ის პუნქტის ნიშანი მოიხსნა',
 };
 
 /**

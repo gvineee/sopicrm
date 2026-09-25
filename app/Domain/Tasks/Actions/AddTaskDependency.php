@@ -4,7 +4,9 @@ namespace App\Domain\Tasks\Actions;
 
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskDependency;
+use App\Domain\Tasks\Services\TaskAuditRecorder;
 use App\Domain\Tasks\Support\TaskDependencyCycleChecker;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -15,11 +17,14 @@ use Illuminate\Validation\ValidationException;
  */
 class AddTaskDependency
 {
-    public function __construct(private readonly TaskDependencyCycleChecker $cycleChecker) {}
+    public function __construct(
+        private readonly TaskDependencyCycleChecker $cycleChecker,
+        private readonly TaskAuditRecorder $audit,
+    ) {}
 
-    public function execute(Task $task, string $dependsOnTaskId): TaskDependency
+    public function execute(Task $task, string $dependsOnTaskId, ?User $actor = null): TaskDependency
     {
-        return DB::transaction(function () use ($task, $dependsOnTaskId) {
+        return DB::transaction(function () use ($task, $dependsOnTaskId, $actor) {
             $existing = TaskDependency::query()
                 ->where('task_id', $task->id)
                 ->where('depends_on_task_id', $dependsOnTaskId)
@@ -36,10 +41,22 @@ class AddTaskDependency
                 ]);
             }
 
-            return TaskDependency::create([
+            $dependency = TaskDependency::create([
                 'task_id' => $task->id,
                 'depends_on_task_id' => $dependsOnTaskId,
             ]);
+
+            // A dependency decides when work may start, so who added one and
+            // when belongs in the task's history rather than nowhere.
+            $this->audit->record(
+                'tasks.dependency.added',
+                $task,
+                $actor,
+                after: ['depends_on_task_id' => $dependsOnTaskId],
+                target: $dependency,
+            );
+
+            return $dependency;
         });
     }
 }

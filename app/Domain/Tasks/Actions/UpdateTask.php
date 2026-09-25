@@ -6,6 +6,8 @@ use App\Domain\Tasks\Models\ChecklistItem;
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskAssignee;
 use App\Domain\Tasks\Models\TaskDependency;
+use App\Domain\Tasks\Services\TaskAuditRecorder;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -31,12 +33,14 @@ use Illuminate\Validation\ValidationException;
  */
 class UpdateTask
 {
+    public function __construct(private readonly TaskAuditRecorder $audit) {}
+
     private const EDITABLE_STATUSES = ['draft', 'assigned', 'in_progress', 'blocked'];
 
     /**
      * @param  array<string, mixed>  $data
      */
-    public function execute(Task $task, array $data): Task
+    public function execute(Task $task, array $data, ?User $actor = null): Task
     {
         if (! in_array($task->status, self::EDITABLE_STATUSES, true)) {
             throw ValidationException::withMessages([
@@ -44,7 +48,7 @@ class UpdateTask
             ]);
         }
 
-        return DB::transaction(function () use ($task, $data) {
+        return DB::transaction(function () use ($task, $data, $actor) {
             $task->fill(array_intersect_key($data, array_flip([
                 'title', 'description', 'project_location_id', 'work_package_id',
                 'accountable_owner_employee_id', 'priority', 'due_at',
@@ -54,7 +58,17 @@ class UpdateTask
                 'requires_photo_evidence', 'min_required_photos',
                 'progress_weight', 'drawing_attachment_id', 'drawing_revision_id',
             ])));
+
+            // Captured before the save: `getDirty()` is empty afterwards, and
+            // an edit whose shape nobody can see is not a trail.
+            $dirty = $task->getDirty();
+            $before = array_intersect_key($task->getOriginal(), $dirty);
+
             $task->save();
+
+            if ($dirty !== []) {
+                $this->audit->record('tasks.task.updated', $task, $actor, before: $before, after: $dirty);
+            }
 
             if (array_key_exists('checklist_items', $data)) {
                 $this->syncChecklist($task, (array) $data['checklist_items']);

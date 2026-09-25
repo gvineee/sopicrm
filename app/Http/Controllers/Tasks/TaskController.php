@@ -16,6 +16,7 @@ use App\Domain\Tasks\Actions\ReopenTask;
 use App\Domain\Tasks\Actions\ReturnTaskSubmission;
 use App\Domain\Tasks\Actions\StartTask;
 use App\Domain\Tasks\Actions\SubmitTaskForAcceptance;
+use App\Domain\Tasks\Actions\ToggleChecklistItem;
 use App\Domain\Tasks\Actions\UnblockTask;
 use App\Domain\Tasks\Actions\UpdateTask;
 use App\Domain\Tasks\Actions\UploadTaskAttachment;
@@ -264,7 +265,7 @@ class TaskController extends Controller
         $this->authorize('update', $task);
 
         try {
-            $action->execute($task, $request->validated());
+            $action->execute($task, $request->validated(), $request->user());
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
         }
@@ -476,7 +477,7 @@ class TaskController extends Controller
      * `task_submissions.checklist_snapshot`; this guard stops the live rows
      * from drifting underneath a review or a closed task.
      */
-    public function toggleChecklistItem(ToggleChecklistItemRequest $request, Project $project, Task $task, ChecklistItem $checklistItem): RedirectResponse
+    public function toggleChecklistItem(ToggleChecklistItemRequest $request, Project $project, Task $task, ChecklistItem $checklistItem, ToggleChecklistItem $action): RedirectResponse
     {
         $this->authorize('work', $task);
 
@@ -490,13 +491,12 @@ class TaskController extends Controller
             ]);
         }
 
-        $isChecked = (bool) $request->validated('is_checked');
-
-        $checklistItem->update([
-            'is_checked' => $isChecked,
-            'checked_by_user_id' => $isChecked ? $request->user()->id : null,
-            'checked_at' => $isChecked ? now() : null,
-        ]);
+        // This used to duplicate the Action's body inline, which left
+        // App\Domain\Tasks\Actions\ToggleChecklistItem as dead code and meant
+        // the write bypassed the domain layer entirely — so when the Tasks
+        // domain gained an audit trail (DV-01), this one path silently kept
+        // writing nothing.
+        $action->execute($checklistItem, (bool) $request->validated('is_checked'), $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Checklist განახლდა.']);
     }

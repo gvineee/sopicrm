@@ -5,6 +5,7 @@ namespace App\Domain\Tasks\Actions;
 use App\Domain\Tasks\Models\ChecklistItem;
 use App\Domain\Tasks\Models\Task;
 use App\Domain\Tasks\Models\TaskAssignee;
+use App\Domain\Tasks\Services\TaskAuditRecorder;
 use App\Domain\Tasks\Services\TaskStatusEventRecorder;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,10 @@ use Illuminate\Support\Facades\DB;
  */
 class CreateTask
 {
-    public function __construct(private readonly TaskStatusEventRecorder $recorder) {}
+    public function __construct(
+        private readonly TaskStatusEventRecorder $recorder,
+        private readonly TaskAuditRecorder $audit,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -77,6 +81,24 @@ class CreateTask
             }
 
             $this->recorder->record($task, null, $task->status, $actor);
+
+            // DV-01: the manager issuing the work. Recorded with what the task
+            // was created AS, so the trail shows the terms of the assignment
+            // and not merely that a row appeared.
+            $this->audit->record('tasks.task.created', $task, $actor, after: [
+                'title' => $task->title,
+                'accountable_owner_employee_id' => $task->accountable_owner_employee_id,
+                'priority' => $task->priority,
+                'due_at' => $task->due_at?->toIso8601String(),
+                'unit' => $task->unit,
+                'planned_quantity' => $task->planned_quantity,
+                'requires_photo_evidence' => (bool) $task->requires_photo_evidence,
+                'min_required_photos' => (int) $task->min_required_photos,
+                'assignee_employee_ids' => array_values($data['assignee_employee_ids'] ?? []),
+                'assignee_team_ids' => array_values($data['assignee_team_ids'] ?? []),
+                'depends_on_task_ids' => array_values($data['depends_on_task_ids'] ?? []),
+                'checklist_item_count' => count($data['checklist_items'] ?? []),
+            ]);
 
             return $task->fresh(['checklistItems', 'assignees', 'dependencies']);
         });

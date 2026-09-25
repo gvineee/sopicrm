@@ -7,6 +7,7 @@ use App\Domain\Projects\Models\Project;
 use App\Domain\Projects\Models\ProjectLocation;
 use App\Domain\Projects\Models\WorkPackage;
 use App\Domain\Shared\Models\AuditEvent;
+use App\Domain\Tasks\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -79,10 +80,14 @@ class ProjectActivityFeed
         $membershipIds = ProjectMembership::query()->where('project_id', $project->id)->pluck('id');
         $locationIds = ProjectLocation::query()->where('project_id', $project->id)->pluck('id');
         $workPackageIds = WorkPackage::query()->where('project_id', $project->id)->pluck('id');
+        // The Tasks domain now writes audit events (DV-01), and a task is a
+        // child of exactly one project, so its history belongs in the
+        // project's activity too.
+        $taskIds = Task::query()->where('project_id', $project->id)->pluck('id');
 
         return AuditEvent::query()
             ->with('actor:id,name')
-            ->where(function ($query) use ($project, $membershipIds, $locationIds, $workPackageIds): void {
+            ->where(function ($query) use ($project, $membershipIds, $locationIds, $workPackageIds, $taskIds): void {
                 $query->where(function ($own) use ($project): void {
                     $own->where('target_type', $project->getMorphClass())
                         ->where('target_id', $project->id);
@@ -92,6 +97,7 @@ class ProjectActivityFeed
                     [ProjectMembership::class, $membershipIds],
                     [ProjectLocation::class, $locationIds],
                     [WorkPackage::class, $workPackageIds],
+                    [Task::class, $taskIds],
                 ] as [$class, $ids]) {
                     if ($ids->isEmpty()) {
                         continue;
@@ -100,6 +106,16 @@ class ProjectActivityFeed
                     $query->orWhere(function ($child) use ($class, $ids): void {
                         $child->where('target_type', (new $class)->getMorphClass())
                             ->whereIn('target_id', $ids);
+                    });
+                }
+
+                // Task children — a dependency, a checklist answer — target
+                // their own row, so they are found by the task id their
+                // payload carries rather than by a join.
+                if ($taskIds->isNotEmpty()) {
+                    $query->orWhere(function ($taskChildren) use ($taskIds): void {
+                        $taskChildren->where('action', 'like', 'tasks.%')
+                            ->whereIn('after->task_id', $taskIds);
                     });
                 }
 
