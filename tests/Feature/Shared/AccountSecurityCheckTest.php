@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Auth\Models\Organization;
+use App\Domain\Shared\Models\AuditEvent;
 use App\Domain\Shared\Services\CurrentOrganization;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -97,4 +98,67 @@ test('the check only reads — it never rotates a password or disables anyone', 
     // their own system, so the command reports and stops.
     expect($user->refresh()->password)->toBe($before)
         ->and($user->is_active)->toBeTrue();
+});
+
+test('the disable command touches only demo-domain accounts, and only when asked', function () {
+    $real = User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+        'email' => 'owner@syslab.ge',
+        'password' => Hash::make('9Hs!kq2vB#7zLr4t'),
+    ]);
+    $demo = User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+        'email' => 'seeded@example.com',
+        'password' => Hash::make('password'),
+    ]);
+
+    // Without --apply it is a preview. A command that deactivates accounts as
+    // a side effect of being run is not one anybody should trust.
+    $this->artisan('security:disable-demo-accounts')->assertExitCode(0);
+
+    expect($demo->refresh()->is_active)->toBeTrue();
+
+    $this->artisan('security:disable-demo-accounts --apply')->assertExitCode(0);
+
+    expect($demo->refresh()->is_active)->toBeFalse()
+        // The real account is identified by NOT being on a demo domain, so
+        // there is no exception list to keep in step.
+        ->and($real->refresh()->is_active)->toBeTrue();
+});
+
+test('a deactivated account cannot sign in even with the right password', function () {
+    $user = User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+        'email' => 'seeded@example.com',
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->artisan('security:disable-demo-accounts --apply')->assertExitCode(0);
+
+    // This is the whole point of deactivating rather than deleting: the row
+    // survives so the audit trail stays readable, and the login stops.
+    $this->post('/login', ['email' => $user->email, 'password' => 'password'])
+        ->assertSessionHasErrors();
+
+    expect(auth()->check())->toBeFalse();
+});
+
+test('deactivating is recorded, because it is a change to who can get in', function () {
+    User::factory()->create([
+        'organization_id' => $this->organization->id,
+        'current_organization_id' => $this->organization->id,
+        'email' => 'seeded@example.com',
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->artisan('security:disable-demo-accounts --apply')->assertExitCode(0);
+
+    $event = AuditEvent::query()->where('action', 'auth.user.deactivated')->sole();
+
+    expect($event->before['is_active'])->toBeTrue()
+        ->and($event->after['is_active'])->toBeFalse()
+        ->and($event->reason)->toContain('A26');
 });
