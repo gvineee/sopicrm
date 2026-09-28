@@ -124,6 +124,17 @@ jobs:
           DB_USERNAME: oda_app
           DB_PASSWORD: secret
 
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend typecheck
+        run: npm run types:check
+
+      # Before the Pest suite: every Inertia page test renders the Blade
+      # layout, which reads public/build/manifest.json.
+      - name: Frontend production build
+        run: npm run build
+
       # The bulk of the suite runs against its own sqlite in-memory DB per
       # phpunit.xml (the documented convention for fast feedback loops,
       # docs/architecture.md §3.5/§3.6). The one exception is
@@ -154,11 +165,3 @@ jobs:
             }
           '
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Frontend typecheck
-        run: npm run types:check
-
-      - name: Frontend production build
-        run: npm run build
