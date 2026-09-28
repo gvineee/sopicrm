@@ -113,7 +113,7 @@ Log format: `DEC-NNN` — decision — reason — date — author (agent name).
 **Date:** 2026-09-16. **Author:** Project Manager.
 
 ### DEC-020 — Permissions/roles seeding: per-module seeder files, auto-discovered
-**Decision:** A base RBAC seeder (`RbacBaseSeeder`, Foundation) creates the roles from section 3's table. Each module ships `database/seeders/modules/<Module>PermissionsSeeder.php` declaring only that module's permissions and role-grants; a single `AggregatingPermissionsSeeder` (Foundation) globs and calls all of them in a fixed, documented order.
+**Decision:** A base RBAC seeder (`RbacBaseSeeder`, Foundation) creates the roles from section 3's table. Each module ships `database/seeders/Modules/<Module>PermissionsSeeder.php` declaring only that module's permissions and role-grants; a single `AggregatingPermissionsSeeder` (Foundation) globs and calls all of them in a fixed, documented order.
 **Reason:** Same concurrency-safety rationale, applied to seeders.
 **Date:** 2026-09-16. **Author:** Project Manager.
 

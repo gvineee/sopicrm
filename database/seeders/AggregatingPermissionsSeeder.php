@@ -18,7 +18,7 @@ use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Foundation-owned (docs/architecture.md §3.3 / DEC-020). Runs every
- * `database/seeders/modules/*PermissionsSeeder.php` in a fixed, documented
+ * `database/seeders/Modules/*PermissionsSeeder.php` in a fixed, documented
  * order. A module adds its own file + a new numbered entry below; it never
  * edits this file's dispatch logic, only appends to the ORDER list.
  *

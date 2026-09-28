@@ -13,7 +13,7 @@ use Spatie\Permission\Models\Role;
 
 /**
  * ADMIN-02: READ-ONLY role/permission listing. Role→permission grants stay
- * code/seeder-owned this pass (database/seeders/modules/*PermissionsSeeder.php)
+ * code/seeder-owned this pass (database/seeders/Modules/*PermissionsSeeder.php)
  * — making the role catalog itself runtime-editable is deliberately out of
  * scope, recorded as a next slice in docs/claude-overnight-progress.md,
  * mirroring how TENANT-01 was deliberately scoped down earlier this session

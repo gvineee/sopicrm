@@ -70,7 +70,7 @@ class AuthModuleServiceProvider extends ServiceProvider
      * spec section 3: "სისტემურ ადმინისტრატორს ფინანსური წვდომა
      * ავტომატურად არ მიენიჭოს." A plain permission check already enforces
      * this (system_admin is never granted `finance.access` —
-     * database/seeders/modules/AuthPermissionsSeeder.php), but this Gate is
+     * database/seeders/Modules/AuthPermissionsSeeder.php), but this Gate is
      * the single named checkpoint every financial-domain controller/Policy
      * should call, so the rule lives in exactly one place rather than being
      * re-derived ad hoc per module.

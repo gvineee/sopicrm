@@ -8,7 +8,7 @@ use Spatie\Permission\Models\Permission;
 /**
  * ADMIN-02 "functionality groups": every seeded permission already follows
  * the `<module>.<resource>.<action>` naming convention (see any
- * database/seeders/modules/*PermissionsSeeder.php docblock) — this groups
+ * database/seeders/Modules/*PermissionsSeeder.php docblock) — this groups
  * permissions by that existing module prefix instead of inventing a second,
  * separately-maintained grouping concept. The label map below must stay in
  * sync with every prefix actually seeded; an unmapped prefix falls back to

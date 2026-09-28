@@ -619,7 +619,7 @@ class ReconstructAttendanceSessionsAction
      * this employee's period ends up flagged, so this is the closest real
      * hook to the ticket's named type. Broadcasts to every user in the
      * organization who currently holds `attendance.anomalies.view` (finance/
-     * hr/owner, per database/seeders/modules/AttendancePermissionsSeeder.php)
+     * hr/owner, per database/seeders/Modules/AttendancePermissionsSeeder.php)
      * rather than a single "manager" — this codebase has no reliable
      * employee-to-manager User link today (Employee::supervisor() points at
      * another Employee, which may itself have no linked User account).

@@ -169,7 +169,7 @@ return [
         // registration form has no legitimate way to supply. Accounts are
         // provisioned by an existing owner/system_admin (a future
         // Users-management screen, `auth.users.manage` permission — see
-        // database/seeders/modules/AuthPermissionsSeeder.php), or by
+        // database/seeders/Modules/AuthPermissionsSeeder.php), or by
         // database/seeders/DatabaseSeeder.php for local dev/CI.
         // Features::registration(),
         Features::resetPasswords(),
