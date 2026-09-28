@@ -130,7 +130,25 @@ jobs:
       # blocks cross-tenant reads with a real runtime DB role, per spec
       # sections 18/23, not just sqlite-backed Eloquent-scope assertions.
       - name: Pest test suite
-        run: php artisan test
+        run: php artisan test --log-junit junit.xml
+
+      # Turns each failing test into a run annotation, so the failure is
+      # readable on the run's summary page (and through the public checks
+      # API) without downloading a ten-thousand-line log.
+      - name: Annotate failing tests
+        if: failure()
+        run: |
+          [ -f junit.xml ] || { echo "::error::Pest produced no junit.xml — it failed before running any test"; exit 0; }
+          php -r '
+            $xml = simplexml_load_file("junit.xml");
+            $n = 0;
+            foreach ($xml->xpath("//testcase[failure or error]") as $case) {
+                $node = $case->failure ?: $case->error;
+                $message = substr(str_replace(["%", "\r", "\n"], ["%25", "%0D", "%0A"], trim((string) $node)), 0, 3000);
+                echo "::error title=" . str_replace([",", ":"], " ", $case["class"] . " > " . $case["name"]) . "::" . $message . PHP_EOL;
+                if (++$n >= 20) { break; }
+            }
+          '
 
       - name: Install frontend dependencies
         run: npm ci
