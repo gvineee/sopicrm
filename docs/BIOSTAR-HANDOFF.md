@@ -26,32 +26,34 @@ is blocked, and on what.
 
 ## What is blocked, and on whom
 
-### 1. No attendance hours — waiting on the OWNER, not on code
+### 1. Attendance hours — decided in code, waiting on two live steps
 
-Both doors have `exit_device: NONE`. BioStar itself does not know which reader
-is an entry and which an exit, so both devices carry
-`reader_role = 'unspecified'` and no session can be paired.
+The owner decided on 2026-09-28: „აღრიცხვა რომელსაც აწერია ეგ მოწყობილობა
+იქნება მხოლოდ აღრიცხვისთვის, ანუ დღის პირველი დაფიქსირება იქნება მოსვლა დღის
+ბოლო დაფიქსირება იქნება წასვლა".
 
-This is now visible rather than silent: reconstruction raises an
-`undirected_reader` anomaly naming both readers
-(„წამკითხველს მიმართულება არ აქვს მითითებული"). It clears itself once the roles
-are set.
+Built (commit `d7ebc19`): two new reader roles.
 
-The owner has to choose one of:
+- `first_last` — reads grouped by local work date and paired earliest → latest.
+  A lone read is an open day while the day runs and a `missing_out` once it is
+  over.
+- `access_only` — a door reader that takes no part in attendance and raises
+  nothing.
 
-- **a.** Configure an exit reader in BioStar so a door has both sides. This is
-  the only option that gives genuinely measured entry and exit.
-- **b.** Designate `544452272 შემოსასვლელი` as `in` and
-  `544452273 აღრიცხვა` as `out` at `/devices/{id}/edit`, and have staff badge
-  out at the second reader. **Note that today every single real badge read is
-  on the gate and the აღრიცხვა reader has none**, so until people actually use
-  it this produces `missing_out` every day — honest, but not hours.
-- **c.** A single-reader toggle policy (first read of a day is an entry, next
-  is an exit). This does NOT exist in the code and should not be added without
-  the owner explicitly asking: the 2026-09-20 test burst has sixteen reads in
-  ten minutes, which toggling would turn into nonsense hours.
+`undirected_reader` is now raised only for readers whose role is still
+`unspecified`. Reads taken before a role was chosen keep their `unspecified`
+snapshot and are not counted: history is not rewritten.
 
-Do not pick one of these on the owner's behalf.
+**Not yet done on the live install** (the session was not permitted to touch
+the live database):
+
+1. `php artisan migrate` — `2026_09_25_170000_add_first_last_and_access_only_reader_roles`.
+2. At `/devices/{id}/edit`: `544452273 აღრიცხვა` → `first_last`, and
+   `544452272 შემოსასვლელი` → `access_only`.
+
+The old open `undirected_reader` anomaly for `011 | ირაკლი ღვინერია` is for gate
+reads and should be resolved by a human at `/attendance/anomalies` once the
+roles are set.
 
 ### 2. The device clock — waiting on ONE new badge read
 
