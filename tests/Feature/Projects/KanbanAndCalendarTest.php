@@ -106,6 +106,8 @@ test('starting a task from a non-assigned status is rejected server-side, not ju
     expect($draftTask->refresh()->status)->toBe('draft');
 });
 
+// The calendar shows the current month, so a due date is pinned inside it —
+// "a few days from now" falls into next month at the end of every month.
 test('the tasks calendar only shows a plain employee their own tasks, matching the Dashboard KPI scope', function () {
     $performerUser = User::factory()->create([
         'organization_id' => $this->organization->id,
@@ -130,7 +132,7 @@ test('the tasks calendar only shows a plain employee their own tasks, matching t
         'project_id' => $this->project->id,
         'accountable_owner_employee_id' => $employee->id,
         'title' => 'My Own Task',
-        'due_at' => now()->addDays(3),
+        'due_at' => now()->startOfMonth()->addDays(14),
     ]);
 
     Task::factory()->create([
@@ -138,7 +140,7 @@ test('the tasks calendar only shows a plain employee their own tasks, matching t
         'project_id' => $this->project->id,
         'accountable_owner_employee_id' => $otherEmployee->id,
         'title' => "Teammate's Task",
-        'due_at' => now()->addDays(3),
+        'due_at' => now()->startOfMonth()->addDays(14),
     ]);
 
     $this->actingAs($performerUser)
@@ -158,7 +160,7 @@ test('the tasks calendar shows an owner every task in the organization, matching
         'project_id' => $this->project->id,
         'accountable_owner_employee_id' => $employee->id,
         'title' => 'My Own Task',
-        'due_at' => now()->addDays(3),
+        'due_at' => now()->startOfMonth()->addDays(14),
     ]);
 
     Task::factory()->create([
@@ -166,7 +168,7 @@ test('the tasks calendar shows an owner every task in the organization, matching
         'project_id' => $this->project->id,
         'accountable_owner_employee_id' => $otherEmployee->id,
         'title' => "Teammate's Task",
-        'due_at' => now()->addDays(3),
+        'due_at' => now()->startOfMonth()->addDays(14),
     ]);
 
     $this->actingAs($this->owner)
@@ -185,7 +187,7 @@ test('the tasks calendar never leaks a task from another organization', function
         'organization_id' => $otherOrg->id,
         'project_id' => $otherProject->id,
         'title' => 'Other Org Task',
-        'due_at' => now()->addDays(2),
+        'due_at' => now()->startOfMonth()->addDays(14),
     ]);
 
     CurrentOrganization::set($this->organization->id);
