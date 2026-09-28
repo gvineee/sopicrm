@@ -127,13 +127,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Frontend typecheck
-        run: npm run types:check
-
       # Before the Pest suite: every Inertia page test renders the Blade
-      # layout, which reads public/build/manifest.json.
+      # layout, which reads public/build/manifest.json. Also before the
+      # typecheck: the build's Wayfinder plugin generates the (gitignored)
+      # resources/js/routes and resources/js/actions modules it imports.
       - name: Frontend production build
         run: npm run build
+
+      - name: Frontend typecheck
+        run: npm run types:check
 
       # The bulk of the suite runs against its own sqlite in-memory DB per
       # phpunit.xml (the documented convention for fast feedback loops,
