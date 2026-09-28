@@ -23,9 +23,9 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <!-- force: CI exports DB_CONNECTION=pgsql as a real environment variable (for
-             migrations and the RLS suite), which phpunit would otherwise leave in
-             place and run the whole suite against Postgres instead of sqlite. -->
+        <!-- force: an exported DB_* variable would otherwise win over these. It does
+             not cover $_SERVER, which Laravel reads first, so CI also keeps DB_*
+             off the job environment (.github/workflows/ci.yml). -->
         <env name="DB_CONNECTION" value="sqlite" force="true"/>
         <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="DB_URL" value="" force="true"/>

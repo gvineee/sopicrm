@@ -9,15 +9,12 @@ permissions:
   contents: read
 
 env:
-  # Points the app at the ephemeral Postgres/Redis service containers below,
-  # overriding whatever .env.example would otherwise set (Laravel/phpdotenv
-  # never overwrites an already-set real environment variable).
-  DB_CONNECTION: pgsql
-  DB_HOST: 127.0.0.1
-  DB_PORT: 5432
-  DB_DATABASE: oda_crm_test
-  DB_USERNAME: oda_app
-  DB_PASSWORD: secret
+  # The DB_* variables are deliberately NOT set here, job-wide: a real
+  # environment variable lands in $_SERVER, which Laravel reads before
+  # anything phpunit.xml sets, so the Pest suite silently ran against
+  # Postgres instead of its documented sqlite. They are set only on the
+  # migration step below. The RLS suite reaches this Postgres through its own
+  # `pgsql_rls_test` connection, whose defaults match the service container.
   REDIS_HOST: 127.0.0.1
   REDIS_PORT: 6379
   QUEUE_CONNECTION: sync
@@ -119,6 +116,13 @@ jobs:
       # btree_gist, etc., per docs/architecture.md §4).
       - name: Run migrations against test database
         run: php artisan migrate --force --no-interaction
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: oda_crm_test
+          DB_USERNAME: oda_app
+          DB_PASSWORD: secret
 
       # The bulk of the suite runs against its own sqlite in-memory DB per
       # phpunit.xml (the documented convention for fast feedback loops,
